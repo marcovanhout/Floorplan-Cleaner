@@ -468,12 +468,13 @@
       rect.strokeWidth(2 / t);
       label.fontSize(14 / t);
     });
-    // Zonder dit worden de resize-handvatten piepklein (en moeilijk te
-    // raken) bij een lage totalScale, bv. wanneer de hele plattegrond
-    // ingezoomd-uit in beeld past - hou ze op een constante schermgrootte.
-    transformer.anchorSize(10 / t);
-    transformer.anchorStrokeWidth(1.5 / t);
-    transformer.borderStrokeWidth(1.5 / t);
+    // Konva houdt de Transformer-handvatten zelf al op een vaste
+    // schermgrootte, ongeacht de stage-schaal - eerder hier ook nog met /t
+    // compenseren telde dus dubbel en maakte de grepen juist reusachtig
+    // groot. Gewone vaste waarden, geen herberekening nodig.
+    transformer.anchorSize(10);
+    transformer.anchorStrokeWidth(1.5);
+    transformer.borderStrokeWidth(1.5);
     // Direct (synchroon) tekenen i.p.v. stage.batchDraw(): batchDraw plant de
     // herteken-beurt via requestAnimationFrame, wat bij snel achter elkaar
     // klikken op +/- kan blijven "hangen" op een oud beeld totdat er iets
