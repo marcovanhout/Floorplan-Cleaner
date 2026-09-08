@@ -1,0 +1,28 @@
+# Real/local customer test data — NEVER commit
+/Test PDF/
+
+# Throwaway spike output (may contain renders of real customer PDFs)
+/scripts/spikes/_out/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+
+# PyInstaller build artifacts
+/packaging/build/
+/packaging/dist/
+
+# Flask runtime / uploaded PDFs / job temp state
+uploads/
+*.log
+
+# OS / editor
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
