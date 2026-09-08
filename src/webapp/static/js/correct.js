@@ -105,6 +105,15 @@
   }
 
   function redrawAll() {
+    // transformer.remove() (NIET destroy) haalt 'm los van roomLayer VOORDAT
+    // destroyChildren() de rest opruimt - anders wordt de transformer zelf
+    // ook vernietigd, inclusief zijn eigen interne resize-greep-vormen. Die
+    // greep-vormen worden maar één keer aangemaakt (bij het aanmaken van de
+    // Transformer) en komen na destroy() nooit meer terug, ook niet als je
+    // 'm daarna weer toevoegt met roomLayer.add(transformer) - dan lijkt de
+    // Transformer normaal te werken (selecteren/verslepen), maar heeft hij
+    // in werkelijkheid geen enkele klikbare resize-greep meer.
+    transformer.remove();
     roomLayer.destroyChildren();
     roomLayer.add(transformer);
     nodesById.clear();
@@ -160,6 +169,19 @@
   // Konva's Transformer intern een 'setAttrs on undefined'-fout geven
   // wanneer draggable() verandert op een node die de Transformer nog
   // vasthoudt (geraakt tijdens handmatig testen van multi-select).
+  // Konva's Transformer raakt intern in de war (dezelfde 'setAttrs on
+  // undefined'-crash) zodra de laag waar hij een afstammeling van is van
+  // schaal of positie verandert terwijl hij aan een node gekoppeld is -
+  // dus ook tijdens zoomen/pannen met een geselecteerd vak. Gebruik dit
+  // overal waar bgLayer/roomLayer schaal of positie wijzigt: loskoppelen,
+  // wijzigen, weer aankoppelen.
+  function withTransformerDetached(fn) {
+    const prevNodes = transformer.nodes();
+    if (prevNodes.length > 0) transformer.nodes([]);
+    fn();
+    if (prevNodes.length > 0) transformer.nodes(prevNodes);
+  }
+
   function applySelection() {
     transformer.nodes([]);
     nodesById.forEach((nodes) => nodes.group.draggable(false));
@@ -304,21 +326,23 @@
     stage.container().style.cursor = tool === "draw" ? "crosshair" : "grab";
   }
 
-  function stagePointerToImagePoint(pos) {
-    const t = totalScale();
-    return { x: (pos.x - bgLayer.x()) / t, y: (pos.y - bgLayer.y()) / t };
+  // Konva's eigen helper: loopt de VOLLEDIGE oudertransformatie-keten af
+  // (stage-schaal/positie + bgLayer's eigen, altijd identiteits-transform)
+  // om de aanwijzerpositie in afbeeldingspixels te geven - geen handmatige
+  // omrekening meer nodig (zie ook waarom hieronder bij fitToContainer/
+  // applyStageTransform: de STAGE zelf schaalt nu, niet de lagen).
+  function stagePointerToImagePoint() {
+    return bgLayer.getRelativePointerPosition();
   }
 
   function setupDrawing() {
-    // drawRect is een kind van roomLayer, die zelf al geschaald/gepositioneerd
-    // is (zie applyStageTransform/fitToContainer) - dus x/y/width/height hier
-    // in AFBEELDINGSPIXELS zetten, niet nog eens met totalScale()
-    // vermenigvuldigen (roomLayer's eigen scale-transform doet dat al).
+    // drawRect is een kind van roomLayer, die zelf altijd op identiteits-
+    // schaal blijft (de STAGE zelf schaalt/verschuift voor zoom/pan) - dus
+    // x/y/width/height hier gewoon in AFBEELDINGSPIXELS zetten.
     stage.on("mousedown touchstart", (e) => {
       if (tool !== "draw") return;
       if (e.target !== stage && !e.target.hasName("bg-image")) return;
-      const pos = stage.getPointerPosition();
-      drawStart = stagePointerToImagePoint(pos);
+      drawStart = stagePointerToImagePoint();
       drawRect = new Konva.Rect({
         x: drawStart.x,
         y: drawStart.y,
@@ -333,8 +357,7 @@
 
     stage.on("mousemove touchmove", () => {
       if (tool !== "draw" || !drawRect || !drawStart) return;
-      const pos = stage.getPointerPosition();
-      const cur = stagePointerToImagePoint(pos);
+      const cur = stagePointerToImagePoint();
       const x0 = Math.min(drawStart.x, cur.x);
       const y0 = Math.min(drawStart.y, cur.y);
       const w = Math.abs(cur.x - drawStart.x);
@@ -381,20 +404,27 @@
   // ---- pannen (achtergrond slepen) ---------------------------------------
   //
   // Nodig zodra je inzoomt: de tekening kan dan gedeeltelijk buiten het
-  // zichtbare vlak vallen. Pannen verschuift bgLayer EN roomLayer als één
-  // geheel (dezelfde positie, zie fitToContainer/applyStageTransform), dus
-  // de vakjes blijven vanzelf op hun plek boven de tekening staan.
+  // zichtbare vlak vallen. Pannen verschuift de STAGE zelf (niet de lagen -
+  // zie fitToContainer/applyStageTransform hieronder voor waarom), dus
+  // bgLayer/roomLayer/de vakjes bewegen daar automatisch in mee.
 
   let panStart = null;
   let didPan = false;
+
+  let panDetachedNodes = [];
 
   function setupPanning() {
     stage.on("mousedown touchstart", (e) => {
       if (tool !== "select") return;
       if (e.target !== stage && !e.target.hasName("bg-image")) return;
-      panStart = { pointer: stage.getPointerPosition(), bgPos: bgLayer.position() };
+      panStart = { pointer: stage.getPointerPosition(), stagePos: stage.position() };
       didPan = false;
       stage.container().style.cursor = "grabbing";
+      // Transformer loskoppelen vóór de stage-positie verandert (zie
+      // withTransformerDetached) - puur defensief, zelfde voorzorg als bij
+      // applyStageTransform.
+      panDetachedNodes = transformer.nodes();
+      if (panDetachedNodes.length > 0) transformer.nodes([]);
     });
 
     stage.on("mousemove touchmove", () => {
@@ -403,17 +433,19 @@
       const dx = pos.x - panStart.pointer.x;
       const dy = pos.y - panStart.pointer.y;
       if (Math.abs(dx) > 2 || Math.abs(dy) > 2) didPan = true;
-      const next = { x: panStart.bgPos.x + dx, y: panStart.bgPos.y + dy };
-      bgLayer.position(next);
-      roomLayer.position(next);
-      bgLayer.draw();
-      roomLayer.draw();
+      stage.position({ x: panStart.stagePos.x + dx, y: panStart.stagePos.y + dy });
+      stage.batchDraw();
     });
 
     stage.on("mouseup touchend", () => {
       if (!panStart) return;
       panStart = null;
       stage.container().style.cursor = tool === "draw" ? "crosshair" : "grab";
+      if (panDetachedNodes.length > 0) {
+        transformer.nodes(panDetachedNodes);
+        panDetachedNodes = [];
+        roomLayer.draw();
+      }
     });
   }
 
@@ -421,8 +453,15 @@
 
   function applyStageTransform() {
     const t = totalScale();
-    bgLayer.scale({ x: t, y: t });
-    roomLayer.scale({ x: t, y: t });
+    // De STAGE zelf schaalt voor zoom (niet bgLayer/roomLayer, die blijven
+    // altijd op identiteits-transform) - dit is het standaard Konva-patroon
+    // waar de Transformer/resize-handvatten correct mee samenwerken. Eerder
+    // schaalden we de lagen zelf, wat de Transformer intern liet crashen
+    // zodra hij aan een geselecteerd vak gekoppeld was (zie git-historie).
+    // Loskoppelen vóór de schaal verandert blijft hier puur defensief.
+    withTransformerDetached(() => {
+      stage.scale({ x: t, y: t });
+    });
     // strokeWidth/fontSize zijn absoluut ingesteld op basis van totalScale()
     // bij aanmaak; bij zoom herrekenen we ze zodat lijnen niet te dik worden.
     nodesById.forEach(({ rect, label }) => {
@@ -435,18 +474,12 @@
     transformer.anchorSize(10 / t);
     transformer.anchorStrokeWidth(1.5 / t);
     transformer.borderStrokeWidth(1.5 / t);
-    // Transformer.forceUpdate() zou hier de handvatten opnieuw uitlijnen na
-    // de schaalwijziging, maar gooit in deze Konva-versie een interne fout
-    // zodra de aangekoppelde node in een geschaalde laag zit - weggelaten;
-    // de Transformer volgt de node toch automatisch bij de eerstvolgende
-    // sleep/resize-interactie, dit is puur cosmetisch tot dan.
     // Direct (synchroon) tekenen i.p.v. stage.batchDraw(): batchDraw plant de
     // herteken-beurt via requestAnimationFrame, wat bij snel achter elkaar
     // klikken op +/- kan blijven "hangen" op een oud beeld totdat er iets
     // anders een hertekening forceert (zoals de Fit-knop) - voor een
     // klik-gestuurde zoom (geen animatie) is synchroon tekenen prima.
-    bgLayer.draw();
-    roomLayer.draw();
+    stage.draw();
   }
 
   function fitToContainer() {
@@ -456,8 +489,9 @@
     fitScale = Math.min(cw / imageWidth, ch / imageHeight) * 0.95;
     zoom = 1;
     stage.size({ width: cw, height: ch });
-    bgLayer.position({ x: (cw - imageWidth * fitScale) / 2, y: (ch - imageHeight * fitScale) / 2 });
-    roomLayer.position(bgLayer.position());
+    withTransformerDetached(() => {
+      stage.position({ x: (cw - imageWidth * fitScale) / 2, y: (ch - imageHeight * fitScale) / 2 });
+    });
     applyStageTransform();
   }
 
