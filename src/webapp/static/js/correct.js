@@ -229,6 +229,14 @@
     rect.size({ width, height });
     nodes.label.width(width); // zie toelichting in buildRoomNode
 
+    // Zonder dit blijven de resize-grepen nog even op hun OUDE plek staan
+    // (ze volgen alleen automatisch tijdens het slepen zelf, niet een
+    // programmatische scale/size-aanpassing hierboven erna) - ze
+    // "verspringen" dan pas bij de eerstvolgende interactie. forceUpdate()
+    // rekent de grepen meteen opnieuw uit tegen de nieuwe afmetingen.
+    transformer.forceUpdate();
+    roomLayer.draw();
+
     room.bbox = [Math.round(x0), Math.round(y0), Math.round(x0 + width), Math.round(y0 + height)];
     room.source = room.source === "auto" ? "user-edited" : room.source;
   }
