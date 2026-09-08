@@ -83,6 +83,11 @@
     group.add(rect);
     group.add(label);
     roomLayer.add(group);
+    // De Transformer moet altijd boven-op alle ruimte-vakken blijven staan,
+    // anders ligt een net toegevoegd vak overheen en vang je alle klikken
+    // af met de gewone (versleep-)rect in plaats van met de resize-grepen
+    // eronder - dan lijkt het net of er alleen verslepen mogelijk is.
+    transformer.moveToTop();
     nodesById.set(room.id, { group, rect, label });
 
     group.on("click tap", (e) => {
@@ -424,6 +429,12 @@
       rect.strokeWidth(2 / t);
       label.fontSize(14 / t);
     });
+    // Zonder dit worden de resize-handvatten piepklein (en moeilijk te
+    // raken) bij een lage totalScale, bv. wanneer de hele plattegrond
+    // ingezoomd-uit in beeld past - hou ze op een constante schermgrootte.
+    transformer.anchorSize(10 / t);
+    transformer.anchorStrokeWidth(1.5 / t);
+    transformer.borderStrokeWidth(1.5 / t);
     // Transformer.forceUpdate() zou hier de handvatten opnieuw uitlijnen na
     // de schaalwijziging, maar gooit in deze Konva-versie een interne fout
     // zodra de aangekoppelde node in een geschaalde laag zit - weggelaten;
