@@ -109,6 +109,11 @@ button.tool-btn.active { background: var(--accent); color: #fff; border-color: v
   gap: 8px;
   margin-bottom: 12px;
   flex-wrap: wrap;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--bg);
+  padding: 8px 0;
 }
 .toolbar .spacer { flex: 1; }
 

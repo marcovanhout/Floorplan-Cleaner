@@ -1,6 +1,7 @@
 """Flask-routes: upload -> detecteren -> corrigeren (canvas) -> exporteren."""
 
 import io
+import os
 import shutil
 
 import fitz
@@ -150,6 +151,11 @@ def export(job_id):
         job.clean_image, rooms, str(out_dir), job.pdf_original_name,
         job.anchor_log, job.mode_a, margin_frac=margin_frac,
     )
+
+    # De totale opgeschoonde plattegrond hoort ook in de export te zitten
+    # (zie PROJECT_SPEC.md sectie 1), niet alleen de losse ruimte-PNG's.
+    base_name = os.path.splitext(job.pdf_original_name)[0] or "plattegrond"
+    job.clean_image.save(out_dir / f"{base_name}_schoon.png")
 
     zip_base = job.tmp_dir / "export"
     zip_path = shutil.make_archive(str(zip_base), "zip", root_dir=str(out_dir))
