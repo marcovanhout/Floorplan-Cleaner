@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block content %}
+<form id="upload-form" class="upload-form">
+  <div class="field">
+    <label for="pdf">Plattegrond-PDF</label>
+    <input type="file" id="pdf" name="pdf" accept="application/pdf" required>
+  </div>
+
+  <div class="field-row">
+    <div class="field">
+      <label for="page">Pagina</label>
+      <input type="number" id="page" name="page" value="0" min="0">
+    </div>
+    <div class="field">
+      <label for="scale">Renderresolutie (schaal)</label>
+      <input type="number" id="scale" name="scale" value="4" min="1" max="8" step="0.5">
+    </div>
+  </div>
+
+  <div class="field checkbox-field">
+    <label>
+      <input type="checkbox" id="force_raster" name="force_raster">
+      Forceer beeldherkenning (MODE B), ook als er CAD-lagen zijn
+    </label>
+  </div>
+
+  {% if not tesseract_available %}
+  <p class="hint hint-warning">
+    Tesseract-OCR is niet gevonden op dit systeem. MODE B werkt dan zonder automatische
+    tekstverwijdering/naamherkenning - de correctiestap in de volgende pagina blijft
+    gewoon bruikbaar om ruimtes handmatig te benoemen.
+  </p>
+  {% endif %}
+
+  <details class="advanced">
+    <summary>Geavanceerd: laag-keywoorden</summary>
+    <div class="field">
+      <label for="keep_keywords">Te behouden lagen (keywoorden)</label>
+      <input type="text" id="keep_keywords" name="keep_keywords" value="{{ default_keep_keywords }}">
+    </div>
+    <div class="field">
+      <label for="drop_keywords">Altijd uit te zetten lagen (keywoorden)</label>
+      <input type="text" id="drop_keywords" name="drop_keywords" value="{{ default_drop_keywords }}">
+    </div>
+  </details>
+
+  <button type="submit" id="upload-submit">Verwerken</button>
+  <p id="upload-status" class="status" hidden></p>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/upload.js') }}"></script>
+{% endblock %}

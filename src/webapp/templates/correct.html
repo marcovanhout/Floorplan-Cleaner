@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="correct-page" data-job-id="{{ job_id }}">
+  <div class="toolbar">
+    <button id="tool-select" class="tool-btn active" data-tool="select" title="Selecteren/slepen/resizen">Selecteren</button>
+    <button id="tool-draw" class="tool-btn" data-tool="draw" title="Nieuw vak tekenen">+ Vak tekenen</button>
+    <button id="btn-merge" disabled title="Selecteer 2 vakken om samen te voegen">Samenvoegen</button>
+    <button id="btn-delete" disabled title="Selecteer een vak om te verwijderen">Verwijderen</button>
+    <span class="spacer"></span>
+    <button id="btn-zoom-in" title="Inzoomen">+</button>
+    <button id="btn-zoom-out" title="Uitzoomen">-</button>
+    <button id="btn-zoom-fit" title="Passend maken">Fit</button>
+    <span class="spacer"></span>
+    <button id="btn-export" class="primary">Exporteren</button>
+  </div>
+
+  <p id="status-msg" class="status" hidden></p>
+  <p id="warnings" class="warnings" hidden></p>
+
+  <div id="stage-container" class="stage-container">
+    <p id="loading" class="status">Bezig met laden...</p>
+  </div>
+
+  <p class="hint">
+    Klik een vak om te selecteren (slepen/resizen), shift-klik een tweede vak om
+    samen te voegen, dubbelklik een naam om te hernoemen. "+ Vak tekenen" en dan
+    slepen om een gemist vak zelf in te tekenen.
+  </p>
+
+  <div id="export-result" class="export-result" hidden>
+    <p>Export klaar.</p>
+    <a id="download-link" href="#" class="primary-link">Download ruimtes.zip</a>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='vendor/konva.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/correct.js') }}"></script>
+{% endblock %}
