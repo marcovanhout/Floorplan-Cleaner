@@ -5,6 +5,9 @@ on:
     types: [published]
   workflow_dispatch: {}  # handmatig te starten voor een testbuild, zonder release
 
+permissions:
+  contents: write  # nodig om de gebouwde exe als release-asset te mogen uploaden
+
 jobs:
   build:
     runs-on: windows-latest
