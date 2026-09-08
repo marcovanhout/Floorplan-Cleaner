@@ -25,18 +25,21 @@
 
   <div class="field checkbox-field">
     <label>
-      <input type="checkbox" id="force_raster" name="force_raster">
+      <input
+        type="checkbox"
+        id="force_raster"
+        name="force_raster"
+        data-tesseract-available="{{ 'true' if tesseract_available else 'false' }}"
+      >
       Forceer beeldherkenning (MODE B), ook als er CAD-lagen zijn
     </label>
   </div>
 
-  {% if not tesseract_available %}
-  <p class="hint hint-warning">
+  <p id="tesseract-warning" class="hint hint-warning" hidden>
     Tesseract-OCR is niet gevonden op dit systeem. MODE B werkt dan zonder automatische
     tekstverwijdering/naamherkenning - de correctiestap in de volgende pagina blijft
     gewoon bruikbaar om ruimtes handmatig te benoemen.
   </p>
-  {% endif %}
 
   <details class="advanced">
     <summary>Geavanceerd: laag-keywoorden</summary>
