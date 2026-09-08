@@ -29,7 +29,7 @@ def main():
     url = f"http://127.0.0.1:{port}"
 
     print("=" * 60)
-    print("  Plattegrond Schoonmaker")
+    print("  Floorplan cleaner")
     print("=" * 60)
     print(f"  Server draait op: {url}")
     print("  Sluit dit venster om de server te stoppen.")
