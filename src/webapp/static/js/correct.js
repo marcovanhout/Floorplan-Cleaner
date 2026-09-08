@@ -295,7 +295,7 @@
     if (tool !== "select") {
       clearSelection();
     }
-    stage.container().style.cursor = tool === "draw" ? "crosshair" : "default";
+    stage.container().style.cursor = tool === "draw" ? "crosshair" : "grab";
   }
 
   function stagePointerToImagePoint(pos) {
@@ -366,6 +366,45 @@
     });
   }
 
+  // ---- pannen (achtergrond slepen) ---------------------------------------
+  //
+  // Nodig zodra je inzoomt: de tekening kan dan gedeeltelijk buiten het
+  // zichtbare vlak vallen. Pannen verschuift bgLayer EN roomLayer als één
+  // geheel (dezelfde positie, zie fitToContainer/applyStageTransform), dus
+  // de vakjes blijven vanzelf op hun plek boven de tekening staan.
+
+  let panStart = null;
+  let didPan = false;
+
+  function setupPanning() {
+    stage.on("mousedown touchstart", (e) => {
+      if (tool !== "select") return;
+      if (e.target !== stage && !e.target.hasName("bg-image")) return;
+      panStart = { pointer: stage.getPointerPosition(), bgPos: bgLayer.position() };
+      didPan = false;
+      stage.container().style.cursor = "grabbing";
+    });
+
+    stage.on("mousemove touchmove", () => {
+      if (!panStart) return;
+      const pos = stage.getPointerPosition();
+      const dx = pos.x - panStart.pointer.x;
+      const dy = pos.y - panStart.pointer.y;
+      if (Math.abs(dx) > 2 || Math.abs(dy) > 2) didPan = true;
+      const next = { x: panStart.bgPos.x + dx, y: panStart.bgPos.y + dy };
+      bgLayer.position(next);
+      roomLayer.position(next);
+      bgLayer.draw();
+      roomLayer.draw();
+    });
+
+    stage.on("mouseup touchend", () => {
+      if (!panStart) return;
+      panStart = null;
+      stage.container().style.cursor = tool === "draw" ? "crosshair" : "grab";
+    });
+  }
+
   // ---- zoom / fit --------------------------------------------------------
 
   function applyStageTransform() {
@@ -429,12 +468,14 @@
     roomLayer.add(transformer);
 
     stage.on("click tap", (e) => {
+      if (didPan) return; // dit was een sleep om te pannen, geen klik-om-te-deselecteren
       if (tool === "select" && (e.target === stage || e.target.hasName("bg-image"))) {
         clearSelection();
       }
     });
 
     setupDrawing();
+    setupPanning();
 
     let resp;
     try {
