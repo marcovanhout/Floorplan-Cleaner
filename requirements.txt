@@ -1,0 +1,7 @@
+pymupdf
+pillow
+numpy
+scipy
+pytesseract
+flask
+waitress
