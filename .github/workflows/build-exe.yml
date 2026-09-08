@@ -27,15 +27,28 @@ jobs:
       - name: Smoke-test the exe
         shell: pwsh
         run: |
-          $proc = Start-Process -FilePath "packaging\dist\FloorplanCleaner.exe" -PassThru
-          Start-Sleep -Seconds 15
+          # --onefile spawnt een APART kind-proces (de uitgepakte, echt
+          # draaiende app) naast het bootloader-proces dat Start-Process
+          # teruggeeft - de luisterende poort hoort bij dat kind, niet bij
+          # $proc.Id zelf. Daarom op NAAM controleren (elk gevonden PID),
+          # niet op de losse PID van Start-Process. Ruime timeout: een
+          # koude start van een ~80MB onefile-exe (uitpakken + numpy/scipy
+          # laden) kan op een CI-runner meer dan de eerdere 35s duren.
+          Start-Process -FilePath "packaging\dist\FloorplanCleaner.exe"
           $listening = $false
-          for ($i = 0; $i -lt 10; $i++) {
-            $conn = Get-NetTCPConnection -State Listen -OwningProcess $proc.Id -ErrorAction SilentlyContinue
-            if ($conn) { $listening = $true; break }
-            Start-Sleep -Seconds 2
+          $deadline = (Get-Date).AddSeconds(90)
+          while ((Get-Date) -lt $deadline) {
+            $procs = Get-Process -Name "FloorplanCleaner" -ErrorAction SilentlyContinue
+            foreach ($p in $procs) {
+              if (Get-NetTCPConnection -State Listen -OwningProcess $p.Id -ErrorAction SilentlyContinue) {
+                $listening = $true
+                break
+              }
+            }
+            if ($listening) { break }
+            Start-Sleep -Seconds 3
           }
-          Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+          Get-Process -Name "FloorplanCleaner" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
           if (-not $listening) {
             Write-Error "De .exe kwam niet met een luisterende poort binnen de tijd - build afgekeurd."
             exit 1
