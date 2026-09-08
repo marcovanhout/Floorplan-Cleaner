@@ -286,6 +286,7 @@
 
   let drawRect = null;
   let drawStart = null;
+  let suppressNextBackgroundClick = false;
 
   function setTool(next) {
     tool = next;
@@ -363,6 +364,12 @@
       setTool("select");
       selectRoom(room.id, false);
       startRename(room.id);
+      // mousedown EN mouseup van deze teken-actie vonden beide plaats op de
+      // achtergrond, dus Konva vuurt hierna nog een synthetische "click" op
+      // diezelfde achtergrond af - zonder deze vlag zou de stage-click-
+      // handler hieronder de zojuist gezette selectie (en dus de
+      // resize-handvatten) meteen weer opheffen.
+      suppressNextBackgroundClick = true;
     });
   }
 
@@ -469,6 +476,10 @@
 
     stage.on("click tap", (e) => {
       if (didPan) return; // dit was een sleep om te pannen, geen klik-om-te-deselecteren
+      if (suppressNextBackgroundClick) {
+        suppressNextBackgroundClick = false;
+        return; // synthetische klik na het tekenen van een nieuw vak, niet echt een deselectie-klik
+      }
       if (tool === "select" && (e.target === stage || e.target.hasName("bg-image"))) {
         clearSelection();
       }
