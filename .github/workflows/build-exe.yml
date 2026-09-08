@@ -1,0 +1,55 @@
+name: Build Windows exe
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch: {}  # handmatig te starten voor een testbuild, zonder release
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Build exe
+        run: |
+          pyinstaller packaging/floorplan_cleaner.spec --noconfirm --distpath packaging/dist --workpath packaging/build
+
+      - name: Smoke-test the exe
+        shell: pwsh
+        run: |
+          $proc = Start-Process -FilePath "packaging\dist\FloorplanCleaner.exe" -PassThru
+          Start-Sleep -Seconds 15
+          $listening = $false
+          for ($i = 0; $i -lt 10; $i++) {
+            $conn = Get-NetTCPConnection -State Listen -OwningProcess $proc.Id -ErrorAction SilentlyContinue
+            if ($conn) { $listening = $true; break }
+            Start-Sleep -Seconds 2
+          }
+          Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+          if (-not $listening) {
+            Write-Error "De .exe kwam niet met een luisterende poort binnen de tijd - build afgekeurd."
+            exit 1
+          }
+          Write-Host "OK: exe start en luistert op een poort."
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FloorplanCleaner-windows
+          path: packaging/dist/FloorplanCleaner.exe
+
+      - name: Attach exe to release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: packaging/dist/FloorplanCleaner.exe
