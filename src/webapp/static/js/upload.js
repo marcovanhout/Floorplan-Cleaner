@@ -3,6 +3,16 @@
   const submitBtn = document.getElementById("upload-submit");
   const status = document.getElementById("upload-status");
 
+  const forceRasterEl = document.getElementById("force_raster");
+  const tesseractWarningEl = document.getElementById("tesseract-warning");
+  const tesseractAvailable = forceRasterEl.dataset.tesseractAvailable === "true";
+
+  // Alleen relevant zodra iemand MODE B daadwerkelijk afdwingt - voor de
+  // normale AutoCAD-PDF's (MODE A, geen OCR nodig) is deze melding ruis.
+  forceRasterEl.addEventListener("change", () => {
+    tesseractWarningEl.hidden = !(forceRasterEl.checked && !tesseractAvailable);
+  });
+
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     submitBtn.disabled = true;
