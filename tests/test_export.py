@@ -51,6 +51,17 @@ def test_write_room_log_reports_missing_names(tmp_path):
     assert "Toilet (code TL-1.01)" not in content  # kreeg wel een PNG, hoort niet in de lijst
 
 
+def test_save_room_crops_skips_room_entirely_outside_image(tmp_path):
+    img = _blank_image(w=400, h=400)
+    rooms = [
+        RoomRecord(id="room_1", bbox=(-500, -500, -400, -450), name="Buiten beeld"),
+        RoomRecord(id="room_2", bbox=(10, 10, 60, 60), name="Geldig"),
+    ]
+    filenames = save_room_crops(img, rooms, str(tmp_path))
+    assert "room_1" not in filenames
+    assert filenames["room_2"] == "geldig.png"
+
+
 def test_write_room_log_reflects_user_deletion_after_correction(tmp_path):
     # Ruimte is door de gebruiker verwijderd in de correctie-UI: bestaat
     # niet meer in de finale 'rooms'-lijst, ook al stond 'm in het

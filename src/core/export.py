@@ -5,12 +5,15 @@ label-ids, zodat dit ook werkt op een door de gebruiker gecorrigeerde
 (samengevoegd/nieuw getekend/verwijderd) ruimtelijst uit de correctie-UI.
 """
 
+import logging
 import os
 
 from PIL import Image
 
 from .names import sanitize_filename
 from .types import AnchorLogEntry, RoomRecord
+
+logger = logging.getLogger(__name__)
 
 
 def save_room_crops(
@@ -43,7 +46,19 @@ def save_room_crops(
     running: dict[str, int] = {}
     unnamed_counter = 0
     for room in ordered:
-        x0, y0, x1, y1 = room.bbox
+        # Vak kan uit de correctie-UI komen (handmatig getekend/versleept) -
+        # clip naar de afbeeldingsgrenzen en sla over als er dan niets
+        # overblijft, i.p.v. te crashen op een ongeldige crop-rechthoek.
+        x0, x1 = sorted(room.bbox[0:3:2])
+        y0, y1 = sorted(room.bbox[1:4:2])
+        x0, x1 = max(0, min(x0, W)), max(0, min(x1, W))
+        y0, y1 = max(0, min(y0, H)), max(0, min(y1, H))
+        if x1 - x0 < 1 or y1 - y0 < 1:
+            logger.warning(
+                "Ruimte %s overgeslagen bij export: vak valt buiten de afbeelding.", room.id
+            )
+            continue
+
         bw, bh = x1 - x0, y1 - y0
         mx = max(int(bw * margin_frac), min_margin_px)
         my = max(int(bh * margin_frac), min_margin_px)
