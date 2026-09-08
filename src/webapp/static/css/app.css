@@ -152,11 +152,15 @@ button.tool-btn.active { background: var(--accent); color: #fff; border-color: v
 }
 
 .room-name-input {
-  position: absolute;
+  /* fixed i.p.v. absolute: zo kunnen we de viewport-coördinaten uit
+     getBoundingClientRect() direct gebruiken zonder scroll-positie erbij
+     op te tellen (absolute plaatst t.o.v. het document, niet t.o.v. het
+     scherm - stond bij een gescrolde pagina daardoor ver van het vak). */
+  position: fixed;
   font-family: var(--font);
   font-size: 13px;
   border: 1px solid var(--accent);
   border-radius: 4px;
   padding: 2px 4px;
-  z-index: 10;
+  z-index: 100;
 }

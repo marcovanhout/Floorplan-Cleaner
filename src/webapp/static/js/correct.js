@@ -240,7 +240,12 @@
     const nodes = nodesById.get(id);
     if (!room || !nodes) return;
 
-    const box = nodes.label.getClientRect({ relativeTo: stage });
+    // Geen relativeTo hier: sinds zoom op de STAGE zelf zit (niet meer op
+    // bgLayer/roomLayer), geeft relativeTo:stage juist de coördinaten VAN
+    // VOOR die schaal (te klein/verkeerd) - zonder relativeTo krijg je de
+    // volledige, al-getransformeerde canvas-pixelpositie die we hier nodig
+    // hebben om de input op het scherm te plaatsen.
+    const box = nodes.label.getClientRect();
     const stageBox = stage.container().getBoundingClientRect();
 
     const input = document.createElement("input");
