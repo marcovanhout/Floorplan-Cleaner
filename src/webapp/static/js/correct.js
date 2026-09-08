@@ -77,6 +77,14 @@
       padding: 2,
       x: 2,
       y: 2,
+      // Breedte vastzetten op de vakbreedte (met ellipsis i.p.v. wrappen):
+      // zonder dit wordt een lange naam op een smal vak breder dan het vak
+      // zelf, en omdat de Transformer zich baseert op de omvattende
+      // GROUP (vak + label samen) ging de selectie-/resize-rand dan verder
+      // dan het echte vak.
+      width: r.width,
+      wrap: "none",
+      ellipsis: true,
       name: "room-label",
     });
 
@@ -127,6 +135,7 @@
     const r = imageBboxToStageRect(room.bbox);
     nodes.group.position({ x: r.x, y: r.y });
     nodes.rect.size({ width: r.width, height: r.height });
+    nodes.label.width(r.width);
     nodes.label.text(room.name || "(geen naam)");
   }
 
@@ -218,6 +227,7 @@
     group.scaleX(1);
     group.scaleY(1);
     rect.size({ width, height });
+    nodes.label.width(width); // zie toelichting in buildRoomNode
 
     room.bbox = [Math.round(x0), Math.round(y0), Math.round(x0 + width), Math.round(y0 + height)];
     room.source = room.source === "auto" ? "user-edited" : room.source;
