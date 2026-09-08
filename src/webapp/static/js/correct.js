@@ -378,7 +378,18 @@
       rect.strokeWidth(2 / t);
       label.fontSize(14 / t);
     });
-    stage.batchDraw();
+    // Transformer.forceUpdate() zou hier de handvatten opnieuw uitlijnen na
+    // de schaalwijziging, maar gooit in deze Konva-versie een interne fout
+    // zodra de aangekoppelde node in een geschaalde laag zit - weggelaten;
+    // de Transformer volgt de node toch automatisch bij de eerstvolgende
+    // sleep/resize-interactie, dit is puur cosmetisch tot dan.
+    // Direct (synchroon) tekenen i.p.v. stage.batchDraw(): batchDraw plant de
+    // herteken-beurt via requestAnimationFrame, wat bij snel achter elkaar
+    // klikken op +/- kan blijven "hangen" op een oud beeld totdat er iets
+    // anders een hertekening forceert (zoals de Fit-knop) - voor een
+    // klik-gestuurde zoom (geen animatie) is synchroon tekenen prima.
+    bgLayer.draw();
+    roomLayer.draw();
   }
 
   function fitToContainer() {
