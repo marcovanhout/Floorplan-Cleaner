@@ -256,6 +256,8 @@ button.tool-btn.active {
   padding: 10px 0;
 }
 .toolbar .spacer { flex: 1; }
+.rotate-angle-group { display: inline-flex; gap: 4px; align-items: center; }
+.rotate-angle-group input[type="number"] { width: 58px; padding: 8px 9px; }
 .toolbar button:not(.primary):not(.active) { background: var(--panel); box-shadow: var(--shadow-sm); }
 .toolbar button.tool-btn.active { box-shadow: none; }
 
