@@ -8,6 +8,7 @@
   const status = document.getElementById("upload-status");
 
   const forceRasterEl = document.getElementById("force_raster");
+  const removeTextEl = document.getElementById("remove_text");
   const tesseractWarningEl = document.getElementById("tesseract-warning");
   const tesseractAvailable = forceRasterEl.dataset.tesseractAvailable === "true";
 
@@ -247,6 +248,12 @@
       body.append("page", pageInput.value);
       body.append("scale", scaleInput.value);
       if (forceRasterEl.checked) body.append("force_raster", "on");
+      // Anders dan force_raster hierboven: altijd expliciet "on"/"off"
+      // meesturen, niet alleen bij aangevinkt - anders kan de server een
+      // UITGEVINKTE checkbox niet onderscheiden van een ontbrekend veld
+      // (deze staat standaard AAN, dus "ontbrekend" zou verkeerd als "aan"
+      // gelezen worden).
+      if (removeTextEl) body.append("remove_text", removeTextEl.checked ? "on" : "off");
       layersListEl.querySelectorAll("input[type=checkbox]:checked").forEach((cb) => {
         body.append("layers", cb.value);
       });

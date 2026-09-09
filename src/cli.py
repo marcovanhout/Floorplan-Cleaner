@@ -78,6 +78,7 @@ def main():
         force_raster=args.force_raster,
         keep_keywords=keep_keywords,
         drop_keywords=drop_keywords,
+        remove_text=not args.no_ocr,
     )
     if clean_result.mode_a:
         print("-> Usable CAD layers found: MODE A (layer filtering).")
