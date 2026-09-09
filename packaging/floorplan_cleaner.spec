@@ -31,6 +31,7 @@ scipy_hidden = [m for m in collect_submodules("scipy") if ".tests." not in m and
 datas = [
     (str(PROJECT_ROOT / "src" / "webapp" / "templates"), "src/webapp/templates"),
     (str(PROJECT_ROOT / "src" / "webapp" / "static"), "src/webapp/static"),
+    (str(PROJECT_ROOT / "VERSION"), "."),
     *pymupdf_datas,
 ]
 

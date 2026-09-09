@@ -81,7 +81,14 @@ def clean_via_raster(
 
     gray = work.mean(axis=2)
     L = (gray * 255).astype(np.uint8)
-    alpha = 255 - L
+    # Een rechtstreekse alpha = 255-L geeft dunne/anti-aliased lijnen een
+    # zwakke dekking (een lichtgrijs randpixel wordt een bijna onzichtbaar
+    # doorzichtig pixel) - muren waren daardoor nauwelijks te onderscheiden
+    # van de transparante achtergrond. Elk zichtbaar (niet-wit) pixel wordt
+    # daarom volledig ondoorzichtig zwart, puur transparant/zwart in plaats
+    # van een geleidelijke overgang - past ook beter bij het doel (schone
+    # lijntekening, geen grijswaarden-render).
+    alpha = np.where(L < 250, 255, 0).astype(np.uint8)
     rgb_out = np.zeros((*L.shape, 3), dtype=np.uint8)
     out = np.dstack([rgb_out, alpha])
     return Image.fromarray(out, "RGBA"), ocr_boxes
