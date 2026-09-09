@@ -4,6 +4,8 @@ CLI (src/cli.py) en webapp (src/webapp/routes.py) roepen beide deze functies
 aan; hier zit geen argparse- of Flask-specifieke code.
 """
 
+from PIL import Image
+
 from .constants import DEFAULT_DROP_KEYWORDS, DEFAULT_KEEP_KEYWORDS
 from .export import save_room_crops, write_room_log
 from .layers import apply_layer_filter, has_usable_layers
@@ -78,6 +80,31 @@ def run_room_detection(
 
     rooms = boxes_to_room_records(room_boxes, room_names)
     return DetectionResult(rooms=rooms, anchor_log=anchor_log, mode_a=clean_result.mode_a)
+
+
+def rotate_clockwise(
+    image: Image.Image, rooms: list[RoomRecord]
+) -> tuple[Image.Image, list[RoomRecord]]:
+    """Roteert de opgeschoonde plattegrond 90 graden met de klok mee, en
+    rekent de ruimte-vakken (in dezelfde afbeeldingspixel-coordinaten) mee
+    om zodat ze op hun plek blijven staan.
+
+    Formule geverifieerd tegen Image.Transpose.ROTATE_270 (= 90 graden CW):
+    een punt (x, y) in de oude afbeelding (hoogte H) komt op (H - y, x) in
+    de nieuwe terecht, dus bbox (x0,y0,x1,y1) -> (H-y1, x0, H-y0, x1).
+    """
+    orig_height = image.height
+    rotated_image = image.transpose(Image.Transpose.ROTATE_270)
+    rotated_rooms = [
+        RoomRecord(
+            id=r.id,
+            bbox=(orig_height - r.bbox[3], r.bbox[0], orig_height - r.bbox[1], r.bbox[2]),
+            name=r.name,
+            source=r.source,
+        )
+        for r in rooms
+    ]
+    return rotated_image, rotated_rooms
 
 
 def export_rooms(

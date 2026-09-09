@@ -19,6 +19,7 @@
   let selectedIds = []; // volgorde van selectie, max 2 (voor samenvoegen)
 
   let stage, bgLayer, roomLayer, transformer;
+  let bgImageNode = null; // Konva.Image met de plattegrond-achtergrond
   const nodesById = new Map(); // room.id -> {group, rect, label}
 
   function totalScale() {
@@ -524,6 +525,95 @@
     applyStageTransform();
   }
 
+  // Inzoomen op een vast punt op het scherm (bv. de muispositie) i.p.v. de
+  // hoek van de stage: reken uit welk afbeeldingspunt daar nu onder ligt,
+  // pas de zoom toe, en verschuif de stage zodat datzelfde punt onder de
+  // muis blijft liggen (zelfde gevoel als bv. Google Maps).
+  function zoomAtPoint(factor, point) {
+    const oldScale = totalScale();
+    const pointTo = {
+      x: (point.x - stage.x()) / oldScale,
+      y: (point.y - stage.y()) / oldScale,
+    };
+    zoom = Math.max(0.2, Math.min(6, zoom * factor));
+    const newScale = totalScale();
+    withTransformerDetached(() => {
+      stage.position({
+        x: point.x - pointTo.x * newScale,
+        y: point.y - pointTo.y * newScale,
+      });
+    });
+    applyStageTransform();
+  }
+
+  function setupWheelZoom() {
+    stage.on("wheel", (e) => {
+      e.evt.preventDefault();
+      const pointer = stage.getPointerPosition();
+      if (!pointer) return;
+      const factor = e.evt.deltaY > 0 ? 1 / 1.08 : 1.08;
+      zoomAtPoint(factor, pointer);
+    });
+  }
+
+  // ---- roteren -----------------------------------------------------------
+
+  async function rotateClockwise() {
+    clearStatus();
+    transformer.nodes([]); // loskoppelen: rooms/afbeelding worden zo vervangen
+    selectedIds = [];
+    try {
+      const resp = await fetch(`/jobs/${jobId}/rotate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rooms }),
+      });
+      if (!resp.ok) {
+        const text = await resp.text();
+        throw new Error(text || `Serverfout (${resp.status})`);
+      }
+      const data = await resp.json();
+      imageWidth = data.width;
+      imageHeight = data.height;
+      rooms = data.rooms.map((r) => ({ ...r }));
+      // Zelfde URL als altijd, maar de inhoud op de server is net veranderd -
+      // cache-buster nodig zodat de browser niet de oude (ongedraaide)
+      // afbeelding uit de cache hergebruikt.
+      await loadBackgroundImage(`/jobs/${jobId}/image?t=${Date.now()}`);
+      fitToContainer();
+      redrawAll();
+    } catch (err) {
+      showStatus("Roteren mislukt: " + err.message, true);
+    }
+  }
+
+  // Laadt (of vervangt) de achtergrondafbeelding. Gebruikt zowel bij het
+  // eerste laden als na het roteren (dan verandert alleen de servercontent
+  // achter dezelfde/nieuwe url, niet de Konva-Image-node zelf).
+  function loadBackgroundImage(url) {
+    return new Promise((resolve, reject) => {
+      const imgObj = new Image();
+      imgObj.onload = () => {
+        if (bgImageNode) {
+          bgImageNode.image(imgObj);
+        } else {
+          bgImageNode = new Konva.Image({ image: imgObj, name: "bg-image" });
+          bgLayer.add(bgImageNode);
+        }
+        // Expliciet zetten i.p.v. op Konva's eigen default (= de natuurlijke
+        // afmeting van de <img>) vertrouwen: na roteren staan imageWidth/
+        // imageHeight (uit de server-respons) al vast VOORDAT deze functie
+        // wordt aangeroepen, dus dit is de betrouwbare bron.
+        bgImageNode.width(imageWidth);
+        bgImageNode.height(imageHeight);
+        bgLayer.draw();
+        resolve();
+      };
+      imgObj.onerror = () => reject(new Error("Afbeelding laden mislukt."));
+      imgObj.src = url;
+    });
+  }
+
   // ---- init ----------------------------------------------------------------
 
   async function init() {
@@ -556,6 +646,7 @@
 
     setupDrawing();
     setupPanning();
+    setupWheelZoom();
 
     let resp;
     try {
@@ -572,14 +663,15 @@
     showWarnings(data.warnings);
     loadingEl.hidden = true;
 
-    const imgObj = new Image();
-    imgObj.onload = () => {
-      const konvaImg = new Konva.Image({ image: imgObj, name: "bg-image" });
-      bgLayer.add(konvaImg);
-      fitToContainer();
-      redrawAll();
-    };
-    imgObj.src = data.image_url;
+    try {
+      await loadBackgroundImage(data.image_url);
+    } catch (err) {
+      loadingEl.hidden = false;
+      loadingEl.textContent = "Laden mislukt: " + err.message;
+      return;
+    }
+    fitToContainer();
+    redrawAll();
 
     window.addEventListener("resize", () => {
       fitToContainer();
@@ -597,6 +689,7 @@
       fitToContainer();
       roomLayer.draw();
     });
+    document.getElementById("btn-rotate").addEventListener("click", rotateClockwise);
     document.addEventListener("keydown", (e) => {
       if ((e.key === "Delete" || e.key === "Backspace") && selectedIds.length && document.activeElement.tagName !== "INPUT") {
         e.preventDefault();

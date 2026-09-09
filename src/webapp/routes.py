@@ -8,7 +8,7 @@ import fitz
 from flask import Blueprint, abort, jsonify, render_template, request, send_file
 
 from src.core.constants import DEFAULT_DROP_KEYWORDS, DEFAULT_KEEP_KEYWORDS
-from src.core.pipeline import export_rooms, run_clean, run_room_detection
+from src.core.pipeline import export_rooms, rotate_clockwise, run_clean, run_room_detection
 from src.core.raster import is_tesseract_available
 from src.core.render import image_to_png_bytes
 from src.core.types import RoomRecord
@@ -131,6 +131,27 @@ def image(job_id):
         io.BytesIO(image_to_png_bytes(job.clean_image)),
         mimetype="image/png",
     )
+
+
+@bp.route("/jobs/<job_id>/rotate", methods=["POST"])
+def rotate(job_id):
+    job = get_job(job_id)
+    if job is None or job.clean_image is None:
+        abort(404, "Onbekende of verlopen job.")
+
+    body = request.get_json(force=True, silent=True) or {}
+    rooms_payload = body.get("rooms")
+    if not isinstance(rooms_payload, list):
+        abort(400, "Verwacht een lijst 'rooms' in de request-body.")
+    rooms = [_room_from_dict(r) for r in rooms_payload]
+
+    job.clean_image, job.rooms = rotate_clockwise(job.clean_image, rooms)
+
+    return jsonify({
+        "width": job.clean_image.width,
+        "height": job.clean_image.height,
+        "rooms": [_room_to_dict(r) for r in job.rooms],
+    })
 
 
 @bp.route("/jobs/<job_id>/export", methods=["POST"])
