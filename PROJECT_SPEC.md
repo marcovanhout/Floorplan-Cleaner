@@ -166,6 +166,37 @@ tool (UI, foutmeldingen, logbestand, CLI) is inmiddels in het Engels
 vertaald, zodat ook niet-Nederlandstalige collega's de tool kunnen
 gebruiken.
 
+**Verder uitgebreid (na de eerste versie van de correctiestap):** een
+"Erase"-knop waarmee je een rechthoek over de tekening sleept om een
+stukje (bv. tekst die de automatische opschoning liet staan) handmatig
+permanent weg te vlakken - er was voorheen geen manier om de
+onderliggende afbeelding zelf te corrigeren, alleen de ruimte-vakken
+erover. Daarnaast een "Undo"-knop die de allerlaatste wijziging
+terugdraait (bewust maar 1 stap diep, geen verdere geschiedenis of
+redo - dekt de praktische "oeps"-situatie zonder de complexiteit van een
+volledige undo/redo-geschiedenis); bij ruimte-vak-wijzigingen gebeurt dit
+direct client-side, bij roteren/gummen (die de afbeelding zelf aanpassen)
+via een korte serverronde, met behoud van het huidige zoomniveau tenzij
+de afbeeldingsafmetingen ook echt veranderd zijn.
+
+Ook is een bug in de opschoning van platte/gescande PDF's (MODE B)
+gevonden en verholpen: dunne lijnen (zoals een deurzwaai) die over een
+gekleurd classificatievlak (bv. een GMP-kleurcode) getekend staan, werden
+per ongeluk meegeveegd met de kleurverwijdering, waardoor complete deuren
+uit het eindresultaat konden verdwijnen. Opgelost door elke pixel te
+vergelijken met de mediaan-helderheid van zijn directe omgeving in plaats
+van een vaste helderheidsgrens te gebruiken (zie de toelichting in
+`src/core/raster.py` voor de precieze onderbouwing) — een vaste grens
+bleek niet betrouwbaar genoeg, omdat lijngewicht en vlakkleur te veel
+verschillen per klantbestand.
+
+Verder kan automatische tekstverwijdering (OCR) nu per verwerking
+aan/uitgezet worden (alleen zichtbaar als Tesseract geïnstalleerd is) -
+kost tijd en is niet altijd gewenst. En de eerder gebruikte, nergens
+toegelichte labels "MODE A"/"MODE B" zijn overal waar de gebruiker ze kon
+zien vervangen door een duidelijke omschrijving van wat er daadwerkelijk
+gebeurt (CAD-lagen vs. beeldherkenning).
+
 ### 3.4 Nice-to-haves / later
 - Verbeterde automatische detectie (zie route's in sectie 4) — kan
   parallel of ná de UI-versie, vermindert het aantal handmatige correcties

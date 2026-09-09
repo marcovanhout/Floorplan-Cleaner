@@ -19,11 +19,13 @@ Choose "More info" → "Run anyway". This is a known limitation of
 unsigned .exe's, not a bug in the app.
 
 **Tesseract-OCR** (optional) is not bundled. It's only needed for
-MODE B (flattened/scanned PDFs without CAD layers) to automatically remove
-text; without Tesseract, MODE B still works (color filter +
-room detection), you just have to type room names yourself in the
-correction step. Install it via the
+image-based cleaning (flattened/scanned PDFs without CAD layers) to
+automatically remove text; without Tesseract, image-based cleaning still
+works (color filter + room detection), you just have to type room names
+yourself in the correction step. Install it via the
 [Tesseract-OCR Windows installer](https://github.com/UB-Mannheim/tesseract/wiki).
+When Tesseract is installed, the upload page shows a checkbox to turn
+automatic text removal off (e.g. for faster processing).
 
 ## Development
 
