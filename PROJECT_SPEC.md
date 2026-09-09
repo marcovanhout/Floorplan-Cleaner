@@ -1,4 +1,4 @@
-# Plattegrond Schoonmaker v2 — Projectspecificatie
+# Floorplan cleaner (v2) — Projectspecificatie
 
 Dit document is een startpunt voor een Claude Code-sessie waarin deze tool
 opnieuw wordt opgebouwd als een volwaardige, offline desktoptool met een
@@ -62,10 +62,28 @@ te worden, alleen overgenomen/verbeterd.
 ### 2.2 MODE B — geen bruikbare lagen (platgeslagen/gescande PDF)
 
 Fallback: kleurvlakken wegfilteren op HSV-kleurverzadiging, tekst
-detecteren en verwijderen met OCR (`pytesseract`). **Nog niet getest op
-een echt exemplaar** — alleen op basis van de MODE A-testfile
-gesimuleerd. Eerste prioriteit bij vervolgwerk: een echt "slecht"
-voorbeeldbestand verzamelen en hierop valideren.
+detecteren en verwijderen met OCR (`pytesseract`). **Inmiddels getest en
+gevalideerd op een echt "slecht" voorbeeldbestand** (platte PDF zonder
+CAD-lagen, tijdens de v2-rebuild). Daarbij drie concrete verbeteringen
+doorgevoerd t.o.v. het oorspronkelijke v1-prototype:
+- Contrast van de opgeschoonde lijnen was te laag (anti-aliased randen
+  kregen een bijna-transparante dekking) → nu een harde zwart/transparant-
+  drempel i.p.v. een lineaire alphawaarde.
+- Tesseract wordt ook gevonden als de Windows-installer zichzelf niet aan
+  PATH heeft toegevoegd (bekende installer-eigenaardigheid) — valt terug op
+  de gebruikelijke installatielocatie.
+- Tekstherkenning gebeurt nu in alle 4 rotaties (0/90/180/270 graden),
+  niet alleen horizontaal — ruimtenamen in een scheve/gedraaide plattegrond
+  werden anders helemaal niet gevonden.
+
+Blijvende, geaccepteerde beperking: OCR is en blijft minder betrouwbaar dan
+echte PDF-tekst (zie 2.3) en mist soms losse woorden of leest ruis
+(arcering e.d.) als tekst — vandaar geen "niet-gekoppelde naam"-waarschuwing
+voor MODE B zoals MODE A die wel heeft (zie 3.3): dat zou vooral ruis
+toevoegen. Stramienlijnen (bouwkundige rasterlijnen) worden bewust niet
+automatisch verwijderd: bij een platte PDF is een stramienlijn niet te
+onderscheiden van een muur, en het risico op per ongeluk weggehaalde muren
+weegt zwaarder dan het cosmetische voordeel.
 
 ### 2.3 Ruimtedetectie (het onderdeel dat nog niet goed genoeg is)
 
