@@ -39,23 +39,6 @@ def _room_from_dict(d: dict) -> RoomRecord:
     )
 
 
-def _unmatched_name_warnings(job) -> list[str]:
-    """Ruimtenamen die in de tekening zijn gevonden maar (nog) niet aan een
-    vak gekoppeld konden worden - alleen als hint bij de correctiestap,
-    het volledige verhaal staat na export in _log.txt."""
-    warnings = []
-    seen = set()
-    room_names = {r.id: r.name for r in job.rooms}
-    for entry in job.anchor_log:
-        if not entry.name or entry.code in seen:
-            continue
-        matched = entry.room_id is not None and room_names.get(entry.room_id) == entry.name
-        if not matched:
-            seen.add(entry.code)
-            warnings.append(f"'{entry.name}' gevonden in de tekening, maar niet gekoppeld aan een vak.")
-    return warnings
-
-
 @bp.route("/")
 def index():
     return render_template(
@@ -172,7 +155,6 @@ def detect(job_id):
         "height": job.clean_image.height,
         "mode": "A" if job.mode_a else "B",
         "rooms": [_room_to_dict(r) for r in job.rooms],
-        "warnings": _unmatched_name_warnings(job),
     })
 
 

@@ -2,6 +2,8 @@
 {% block content %}
 <div class="correct-page" data-job-id="{{ job_id }}">
   <div class="toolbar">
+    <a href="/" id="btn-back" class="tool-btn-link" title="Terug naar startpagina">← Terug</a>
+    <span class="spacer"></span>
     <button id="tool-select" class="tool-btn active" data-tool="select" title="Selecteren/slepen/resizen">Selecteren</button>
     <button id="tool-draw" class="tool-btn" data-tool="draw" title="Nieuw vak tekenen">+ Vak tekenen</button>
     <button id="btn-merge" disabled title="Selecteer 2 vakken om samen te voegen">Samenvoegen</button>
@@ -31,8 +33,6 @@
     met het muiswiel om in/uit te zoomen op de plek van de muis, of gebruik
     "Roteren" als de tekening scheef staat.
   </p>
-
-  <p id="warnings" class="warnings" hidden></p>
 
   <div id="export-result" class="export-result" hidden>
     <p>Export klaar.</p>
