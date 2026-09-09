@@ -6,6 +6,7 @@
     <span class="spacer"></span>
     <button id="tool-select" class="tool-btn active" data-tool="select" title="Select/drag/resize">Select</button>
     <button id="tool-draw" class="tool-btn" data-tool="draw" title="Draw a new box">+ Draw box</button>
+    <button id="tool-erase" class="tool-btn" data-tool="erase" title="Draw a rectangle to erase it (make transparent)">⌫ Erase</button>
     <button id="btn-merge" disabled title="Select 2 boxes to merge">Merge</button>
     <button id="btn-delete" disabled title="Select a box to delete">Delete</button>
     <span class="spacer"></span>
@@ -37,7 +38,8 @@
     degrees per click; the input field next to it rotates by a custom angle
     (for example to straighten a skewed scan) - note: at a large deviation
     from a right angle, the straight room boxes will then be somewhat looser
-    than the room itself.
+    than the room itself. "Erase" lets you drag a rectangle to permanently wipe
+    that part of the drawing (e.g. leftover text) - this cannot be undone.
   </p>
 
   <div id="export-result" class="export-result" hidden>

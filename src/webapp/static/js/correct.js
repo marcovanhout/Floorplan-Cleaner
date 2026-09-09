@@ -14,7 +14,8 @@
   let imageHeight = 0;
   let fitScale = 1;
   let zoom = 1;
-  let tool = "select"; // "select" | "draw"
+  let tool = "select"; // "select" | "draw" | "erase"
+  const ERASE_COLOR = "#b3413f"; // zelfde als --danger in app.css
   // Waarschuwt bij "Terug" als er nog niet-geëxporteerde wijzigingen zijn
   // (correcties leven alleen client-side totdat er geëxporteerd wordt).
   let hasUnsavedChanges = false;
@@ -348,7 +349,7 @@
     if (tool !== "select") {
       clearSelection();
     }
-    stage.container().style.cursor = tool === "draw" ? "crosshair" : "grab";
+    stage.container().style.cursor = tool === "draw" || tool === "erase" ? "crosshair" : "grab";
   }
 
   // Konva's eigen helper: loopt de VOLLEDIGE oudertransformatie-keten af
@@ -427,6 +428,95 @@
     });
   }
 
+  // ---- gum (rechthoek slepen om permanent uit te vlakken) ---------------
+  //
+  // Anders dan alle andere correcties raakt dit de AFBEELDING zelf (niet
+  // een ruimte-vak) - voor restjes die de automatische opschoning laat
+  // staan (bv. tekst die OCR miste). Zelfde sleep-interactie als
+  // setupDrawing() hierboven, maar het resultaat gaat naar de server i.p.v.
+  // een nieuw ruimte-vak aan te maken, en is niet ongedaan te maken.
+
+  let eraseRectPreview = null;
+  let eraseStart = null;
+
+  async function eraseRect(x0, y0, x1, y1) {
+    clearStatus();
+    try {
+      const resp = await fetch(`/jobs/${jobId}/erase`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ x0, y0, x1, y1 }),
+      });
+      if (!resp.ok) {
+        const text = await resp.text();
+        throw new Error(text || `Server error (${resp.status})`);
+      }
+      // Afmetingen en ruimte-vakken veranderen niet door een gum-actie -
+      // alleen de achtergrondafbeelding opnieuw laden volstaat (geen
+      // fitToContainer/redrawAll nodig, die zijn voor roteren waar de
+      // afbeeldingsgrootte wel kan wijzigen).
+      await loadBackgroundImage(`/jobs/${jobId}/image?t=${Date.now()}`);
+      hasUnsavedChanges = true;
+    } catch (err) {
+      showStatus("Erase failed: " + err.message, true);
+    }
+  }
+
+  function setupErasing() {
+    stage.on("mousedown touchstart", (e) => {
+      if (tool !== "erase") return;
+      // Anders dan setupDrawing/setupPanning hierboven GEEN restrictie tot
+      // de lege achtergrond: rommelige tekst die je wilt wegvegen zit vaak
+      // juist BINNEN een al gedetecteerd (naamloos) ruimte-vak - de gum moet
+      // dus overal kunnen starten, ook bovenop een bestaand vak. Veilig
+      // (geen conflict met het verslepen van dat vak): ruimte-vakken zijn
+      // nooit draggable zolang tool !== "select" (zie applySelection).
+      eraseStart = stagePointerToImagePoint();
+      eraseRectPreview = new Konva.Rect({
+        x: eraseStart.x,
+        y: eraseStart.y,
+        width: 0,
+        height: 0,
+        stroke: ERASE_COLOR,
+        dash: [4 / totalScale(), 4 / totalScale()],
+        strokeWidth: 2 / totalScale(),
+        fill: "rgba(179,65,63,0.15)",
+      });
+      roomLayer.add(eraseRectPreview);
+    });
+
+    stage.on("mousemove touchmove", () => {
+      if (tool !== "erase" || !eraseRectPreview || !eraseStart) return;
+      const cur = stagePointerToImagePoint();
+      const x0 = Math.min(eraseStart.x, cur.x);
+      const y0 = Math.min(eraseStart.y, cur.y);
+      const w = Math.abs(cur.x - eraseStart.x);
+      const h = Math.abs(cur.y - eraseStart.y);
+      eraseRectPreview.setAttrs({ x: x0, y: y0, width: w, height: h });
+      roomLayer.batchDraw();
+    });
+
+    stage.on("mouseup touchend", () => {
+      if (tool !== "erase" || !eraseRectPreview) return;
+      const x0 = eraseRectPreview.x();
+      const y0 = eraseRectPreview.y();
+      const w = eraseRectPreview.width();
+      const h = eraseRectPreview.height();
+      eraseRectPreview.destroy();
+      eraseRectPreview = null;
+      eraseStart = null;
+      roomLayer.draw();
+
+      const minSizeImgPx = 8 / totalScale(); // zelfde ondergrens als bij "+ Draw box"
+      if (w < minSizeImgPx || h < minSizeImgPx) return;
+
+      eraseRect(Math.round(x0), Math.round(y0), Math.round(x0 + w), Math.round(y0 + h));
+      // zelfde reden als bij setupDrawing/setupMarqueeSelect: onderdrukt de
+      // synthetische achtergrond-klik die anders meteen hierna volgt.
+      suppressNextBackgroundClick = true;
+    });
+  }
+
   // ---- pannen (achtergrond slepen) ---------------------------------------
   //
   // Nodig zodra je inzoomt: de tekening kan dan gedeeltelijk buiten het
@@ -467,7 +557,7 @@
     stage.on("mouseup touchend", () => {
       if (!panStart) return;
       panStart = null;
-      stage.container().style.cursor = tool === "draw" ? "crosshair" : "grab";
+      stage.container().style.cursor = tool === "draw" || tool === "erase" ? "crosshair" : "grab";
       if (panDetachedNodes.length > 0) {
         transformer.nodes(panDetachedNodes);
         panDetachedNodes = [];
@@ -741,6 +831,7 @@
     });
 
     setupDrawing();
+    setupErasing();
     setupPanning();
     setupMarqueeSelect();
     setupWheelZoom();

@@ -46,6 +46,20 @@
       page is still usable to name rooms manually.
     </p>
 
+    {% if tesseract_available %}
+    <div class="field checkbox-field">
+      <label>
+        <input type="checkbox" id="remove_text" name="remove_text" checked>
+        Automatically remove detected text (OCR)
+      </label>
+    </div>
+    <p class="hint">
+      Turn this off for faster processing - room names from the drawing may
+      then remain visible on the image; you can still rename rooms yourself in
+      the next step (that only changes the exported filename, not the image).
+    </p>
+    {% endif %}
+
     <p id="layers-loading" class="status" hidden>Reading file...</p>
   </div>
 

@@ -6,7 +6,7 @@ aan; hier zit geen argparse- of Flask-specifieke code.
 
 import math
 
-from PIL import Image
+from PIL import Image, ImageDraw
 
 from .constants import DEFAULT_DROP_KEYWORDS, DEFAULT_KEEP_KEYWORDS
 from .export import save_room_crops, write_room_log
@@ -26,6 +26,7 @@ def run_clean(
     keep_keywords: list[str] | None = None,
     drop_keywords: list[str] | None = None,
     selected_layers: list[str] | None = None,
+    remove_text: bool = True,
 ) -> CleanResult:
     """selected_layers: expliciete lijst laagnamen (bv. rechtstreeks uit de
     laag-kiezer in de webapp) - heeft voorrang op keep_keywords/drop_keywords
@@ -48,7 +49,7 @@ def run_clean(
         img = force_black_lines(render_page(page, scale, alpha=True))
         return CleanResult(image=img, mode_a=True, kept_layers=kept, dropped_layers=dropped)
 
-    img, ocr_boxes = clean_via_raster(page, scale)
+    img, ocr_boxes = clean_via_raster(page, scale, remove_text=remove_text)
     return CleanResult(image=img, mode_a=False, ocr_boxes=ocr_boxes)
 
 
@@ -178,6 +179,19 @@ def rotate_by_angle(
             )
         )
     return rotated_image, rotated_rooms
+
+
+def erase_rect(image: Image.Image, x0: int, y0: int, x1: int, y1: int) -> Image.Image:
+    """Vlakt een door de gebruiker aangewezen rechthoek volledig transparant -
+    voor het handmatig wegvegen van restjes die de automatische opschoning
+    laat staan (bv. tekst die OCR miste). Los van de ruimte-vakken zelf, die
+    veranderen hierdoor niet."""
+    img = image.convert("RGBA")
+    x0, x1 = sorted((max(0, min(x0, img.width)), max(0, min(x1, img.width))))
+    y0, y1 = sorted((max(0, min(y0, img.height)), max(0, min(y1, img.height))))
+    if x1 > x0 and y1 > y0:
+        ImageDraw.Draw(img).rectangle([x0, y0, x1 - 1, y1 - 1], fill=(0, 0, 0, 0))
+    return img
 
 
 def export_rooms(

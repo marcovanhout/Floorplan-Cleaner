@@ -10,7 +10,14 @@ from flask import Blueprint, abort, jsonify, render_template, request, send_file
 
 from src.core.constants import DEFAULT_DROP_KEYWORDS, DEFAULT_KEEP_KEYWORDS
 from src.core.layers import apply_explicit_layer_selection, list_layers, recommend_layers
-from src.core.pipeline import export_rooms, rotate_by_angle, rotate_clockwise, run_clean, run_room_detection
+from src.core.pipeline import (
+    erase_rect,
+    export_rooms,
+    rotate_by_angle,
+    rotate_clockwise,
+    run_clean,
+    run_room_detection,
+)
 from src.core.raster import is_tesseract_available
 from src.core.render import force_black_lines, image_to_png_bytes, render_page
 from src.core.types import RoomRecord
@@ -110,6 +117,7 @@ def process(job_id):
     page_no = int(request.form.get("page", 0) or 0)
     scale = float(request.form.get("scale", 4.0) or 4.0)
     force_raster = request.form.get("force_raster") == "on"
+    remove_text = request.form.get("remove_text", "on") == "on"
 
     doc = fitz.open(job.pdf_path)
     if page_no < 0 or page_no >= doc.page_count:
@@ -123,6 +131,7 @@ def process(job_id):
 
     clean_result = run_clean(
         doc, page, scale=scale, force_raster=force_raster, selected_layers=selected_layers,
+        remove_text=remove_text,
     )
     detection = run_room_detection(page, scale, clean_result)
 
@@ -219,6 +228,26 @@ def rotate_angle(job_id):
         "height": job.clean_image.height,
         "rooms": [_room_to_dict(r) for r in job.rooms],
     })
+
+
+@bp.route("/jobs/<job_id>/erase", methods=["POST"])
+def erase(job_id):
+    """Handmatige 'gum': vlakt een door de gebruiker aangewezen rechthoek op
+    de afbeelding wit/transparant - voor restjes die de automatische
+    opschoning laat staan. Raakt alleen de afbeelding, niet de ruimte-vakken."""
+    job = get_job(job_id)
+    if job is None or job.clean_image is None:
+        abort(404, "Unknown or expired job.")
+
+    body = request.get_json(force=True, silent=True) or {}
+    try:
+        x0, y0, x1, y1 = (int(body[k]) for k in ("x0", "y0", "x1", "y1"))
+    except (KeyError, TypeError, ValueError):
+        abort(400, "Expected numeric x0, y0, x1, y1 in the request body.")
+
+    job.clean_image = erase_rect(job.clean_image, x0, y0, x1, y1)
+
+    return jsonify({"width": job.clean_image.width, "height": job.clean_image.height})
 
 
 @bp.route("/jobs/<job_id>/export", methods=["POST"])
