@@ -6,6 +6,7 @@ from pathlib import Path
 
 import numpy as np
 from PIL import Image
+from scipy import ndimage
 
 from .render import render_page
 
@@ -95,14 +96,61 @@ def _saturation(rgb: np.ndarray) -> np.ndarray:
     return sat
 
 
+def _colored_mask(
+    rgb: np.ndarray,
+    sat_threshold: float,
+    local_window: int = 5,
+    local_delta: float = 0.1,
+    downsample: int = 3,
+) -> np.ndarray:
+    """Welke pixels tellen als "gekleurd vlak" (en dus weg te vlakken)?
+
+    Puur op verzadiging afgaan is niet genoeg: waar een zwarte lijn (bv. een
+    deurzwaai) over een gekleurd vlak getekend is, ontstaat door anti-aliasing
+    een mengkleur die numeriek toch een hoge verzadiging heeft - (max-min)/max
+    is instabiel vlak bij zwart. Zo'n lijn-pixel is dus ondanks die "kleur"
+    duidelijk donkerder dan het vlak eromheen - maar HOEVEEL donkerder
+    verschilt sterk per lijn (een dunne deurzwaai over een fel kleurvlak kan
+    best licht ogen) en per klantbestand (elke tekenaar gebruikt andere
+    kleuren). Een vaste helderheidsgrens ("alles onder X is een lijn") bleek
+    daardoor niet betrouwbaar: te streng en dunne lijnen verdwijnen alsnog,
+    te soepel en er blijft kleurresidu staan.
+
+    In plaats daarvan wordt elke pixel vergeleken met de MEDIAAN-helderheid
+    in zijn directe omgeving (een klein venster) - dat is een schatting van
+    de "echte" vlakkleur ter plekke, ongevoelig voor een dunne lijn (die
+    binnen zo'n venster altijd in de minderheid is, of hij nu donkerder of
+    lichter is dan het vlak). Een MAX-venster bleek niet te gebruiken: vlak-
+    pixels naast een lichte (bijna-witte) hulplijn in het kleurvlak kregen
+    daardoor zelf ook een hoge lokale max, leken zo "opvallend donkerder"
+    dan hun buren, en werden per ongeluk als lijn behandeld - met dikke
+    zwarte vegen langs die hulplijnen tot gevolg. Alleen pixels die
+    duidelijk DONKERDER zijn dan hun lokale mediaan blijven als lijn staan.
+
+    Een mediaanfilter op volle resolutie is op een groot ingescand blad
+    (tientallen miljoenen pixels) te traag (tientallen seconden). De lokale
+    vlakkleur verandert echter alleen op kamerschaal, niet van pixel tot
+    pixel - de mediaan hoeft dus niet op elke pixel apart berekend te worden.
+    Eerst uitdunnen (elke `downsample`-ste pixel), daar het venster op
+    toepassen, en weer terug opschalen is >100x sneller en geeft vrijwel
+    dezelfde uitkomst.
+    """
+    cmax = rgb.max(axis=2)
+    small = cmax[::downsample, ::downsample]
+    local_median_small = ndimage.median_filter(small, size=local_window)
+    local_median = np.repeat(np.repeat(local_median_small, downsample, axis=0), downsample, axis=1)
+    local_median = local_median[: cmax.shape[0], : cmax.shape[1]]
+    is_line_like = (local_median - cmax) > local_delta
+    return (_saturation(rgb) > sat_threshold) & ~is_line_like
+
+
 def clean_via_raster(
     page, scale: float, sat_threshold: float = 0.12, remove_text: bool = True
 ) -> tuple[Image.Image, list[tuple[int, int, int, int, str]]]:
     img = render_page(page, scale, alpha=False)
     arr = np.array(img).astype(np.float32) / 255.0
 
-    sat = _saturation(arr)
-    colored_mask = sat > sat_threshold
+    colored_mask = _colored_mask(arr, sat_threshold)
     work = arr.copy()
     work[colored_mask] = [1, 1, 1]
 
