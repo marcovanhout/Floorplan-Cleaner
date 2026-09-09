@@ -102,7 +102,7 @@ def write_room_log(
     rooms_by_id = {r.id: r for r in rooms}
     lines = []
     lines.append(f"Room log for: {pdf_path}")
-    lines.append(f"Method: {'MODE A (CAD layers)' if mode_a else 'MODE B (image recognition, best effort)'}")
+    lines.append(f"Method: {'CAD layers (precise)' if mode_a else 'Image recognition (best effort)'}")
     lines.append(f"Number of detected room areas: {len(rooms)}")
     lines.append("")
     lines.append("=== PNGs created ===")
