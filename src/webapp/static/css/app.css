@@ -149,11 +149,10 @@ input[type="file"] {
 }
 
 .layers-preview-box {
-  padding: 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: repeating-conic-gradient(#e9ebe7 0% 25%, var(--bg) 0% 50%) 0 0 / 18px 18px;
-  min-height: 120px;
+  height: 460px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -161,10 +160,27 @@ input[type="file"] {
   flex: 2 1 420px;
   min-width: 0;
   align-self: stretch;
+  position: relative;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
 }
 .layers-preview-box.loading { opacity: 0.5; }
-.layers-preview-box img { max-width: 100%; max-height: 460px; display: block; }
-.layers-preview-box .hint { margin: 0; text-align: center; }
+.layers-preview-box.panning { cursor: grabbing; }
+.layers-preview-box img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  display: block;
+  user-select: none;
+  -webkit-user-drag: none;
+  /* Slepen gebeurt op de omliggende box, niet op de afbeelding zelf - dit
+     voorkomt dat de browser er zijn eigen "afbeelding verslepen"-gedrag
+     (ghost-icoon) tussendoor gooit. */
+  pointer-events: none;
+}
+.layers-preview-box .hint { margin: 0; text-align: center; padding: 0 10px; }
 .layer-checkbox input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px; flex-shrink: 0; }
 
 @media (max-width: 720px) {
