@@ -85,10 +85,36 @@
       if (!resp.ok) throw new Error(await resp.text());
       const blob = await resp.blob();
       const oldUrl = previewImgEl.src;
-      previewImgEl.src = URL.createObjectURL(blob);
+      const newUrl = URL.createObjectURL(blob);
+      // Natuurlijke afmeting nodig VOOR we 'm laten zien (om te bepalen of de
+      // bestaande zoom/pan nog past, of dat we opnieuw moeten passend maken)
+      // - anders knippert de afbeelding even op zijn eigen (nog niet
+      // geschaalde) grootte voordat onze transform toeslaat.
+      const dims = await new Promise((resolve) => {
+        const probe = new Image();
+        probe.onload = () => resolve({ w: probe.naturalWidth, h: probe.naturalHeight });
+        probe.onerror = () => resolve(null);
+        probe.src = newUrl;
+      });
+      if (mySeq !== previewRequestSeq) {
+        URL.revokeObjectURL(newUrl);
+        return;
+      }
+      if (!dims) throw new Error("Kon voorbeeldafbeelding niet laden.");
+
+      previewImgEl.src = newUrl;
       previewImgEl.hidden = false;
       previewPlaceholderEl.hidden = true;
       if (oldUrl && oldUrl.startsWith("blob:")) URL.revokeObjectURL(oldUrl);
+
+      // Zelfde afmeting als de vorige keer (bv. alleen een laag aan/
+      // uitgevinkt) -> huidige zoom/pan laten staan, zodat je precies kunt
+      // zien wat er in dat ingezoomde stukje verandert. Andere afmeting
+      // (nieuw bestand, of een andere pagina) -> opnieuw passend maken.
+      if (!previewNaturalSize || previewNaturalSize.w !== dims.w || previewNaturalSize.h !== dims.h) {
+        previewNaturalSize = dims;
+        fitPreviewTransform();
+      }
     } catch (err) {
       // Een mislukt voorbeeld mag de rest van de flow niet blokkeren - het
       // vorige voorbeeld (indien er een was) blijft gewoon staan.
@@ -101,9 +127,71 @@
   layersListEl.addEventListener("change", schedulePreview);
   pageInput.addEventListener("change", schedulePreview);
 
+  // ---- voorbeeld zoomen (scrollwiel) en pannen (slepen) --------------------
+
+  let previewNaturalSize = null; // {w,h} van de laatst geladen voorbeeldafbeelding
+  let previewScale = 1;
+  let previewX = 0;
+  let previewY = 0;
+
+  function applyPreviewTransform() {
+    previewImgEl.style.transform = `translate(${previewX}px, ${previewY}px) scale(${previewScale})`;
+  }
+
+  // Past de afbeelding op zijn ORIGINELE (server-)resolutie in de box in en
+  // centreert 'm - hetzelfde idee als "Fit" op de correctiepagina, maar dan
+  // automatisch bij een nieuw bestand/pagina i.p.v. een aparte knop.
+  function fitPreviewTransform() {
+    if (!previewNaturalSize) return;
+    const boxW = previewBoxEl.clientWidth;
+    const boxH = previewBoxEl.clientHeight;
+    const { w, h } = previewNaturalSize;
+    previewScale = Math.min(boxW / w, boxH / h, 1) * 0.98;
+    previewX = (boxW - w * previewScale) / 2;
+    previewY = (boxH - h * previewScale) / 2;
+    applyPreviewTransform();
+  }
+
+  previewBoxEl.addEventListener("wheel", (e) => {
+    if (previewImgEl.hidden || !previewNaturalSize) return;
+    e.preventDefault();
+    const rect = previewBoxEl.getBoundingClientRect();
+    const pointerX = e.clientX - rect.left;
+    const pointerY = e.clientY - rect.top;
+    const oldScale = previewScale;
+    const factor = e.deltaY > 0 ? 1 / 1.15 : 1.15;
+    const newScale = Math.max(0.2, Math.min(10, oldScale * factor));
+    if (newScale === oldScale) return;
+    // Het punt onder de muis moet onder de muis blijven staan tijdens het zoomen.
+    previewX = pointerX - ((pointerX - previewX) / oldScale) * newScale;
+    previewY = pointerY - ((pointerY - previewY) / oldScale) * newScale;
+    previewScale = newScale;
+    applyPreviewTransform();
+  });
+
+  let previewPanStart = null;
+  previewBoxEl.addEventListener("mousedown", (e) => {
+    if (previewImgEl.hidden || !previewNaturalSize) return;
+    previewPanStart = { pointerX: e.clientX, pointerY: e.clientY, x: previewX, y: previewY };
+    previewBoxEl.classList.add("panning");
+  });
+  window.addEventListener("mousemove", (e) => {
+    if (!previewPanStart) return;
+    previewX = previewPanStart.x + (e.clientX - previewPanStart.pointerX);
+    previewY = previewPanStart.y + (e.clientY - previewPanStart.pointerY);
+    applyPreviewTransform();
+  });
+  window.addEventListener("mouseup", () => {
+    previewPanStart = null;
+    previewBoxEl.classList.remove("panning");
+  });
+  // Dubbelklik: snel terug naar passend-in-beeld als je de weg kwijt bent na inzoomen.
+  previewBoxEl.addEventListener("dblclick", fitPreviewTransform);
+
   async function inspectSelectedFile() {
     currentJobId = null;
     previewRequestSeq++; // eventuele nog lopende preview-aanvraag van een vorig bestand negeren
+    previewNaturalSize = null; // dwingt fitPreviewTransform() af bij het eerste voorbeeld van dit bestand
     submitBtn.disabled = true;
     layersSectionEl.hidden = true;
     layersListEl.innerHTML = "";
