@@ -151,6 +151,21 @@ Dit verschuift het probleem van "moet automatisch >90% kloppen" naar
 voor gebruikers dan nu handmatig missende ruimtes zoeken/bijsnijden in
 Paint.
 
+**Inmiddels gebouwd** (breder dan hier oorspronkelijk gepland): naast
+slepen/vergroten/verkleinen/samenvoegen/intekenen/verwijderen van losse
+vakken kan de gebruiker nu ook met Shift ingedrukt een selectievak over
+meerdere vakken tegelijk slepen om ze in één keer te verwijderen
+("spookvakjes" bij een rommelige detectie zijn zo snel op te ruimen). De
+plattegrond kan zowel per 90 graden als op een volledig vrije hoek
+gedraaid worden (rechtzetten van een scheef ingescande tekening); bij een
+vrije hoek blijven ruimte-vakken zelf axis-aligned (een iets ruimere
+uitsnede dan de werkelijke ruimte, bewust geaccepteerd i.p.v. overal
+schuine rechthoeken te ondersteunen). Er is een terug-knop naar de
+startpagina (met bevestiging bij niet-geëxporteerde wijzigingen). De hele
+tool (UI, foutmeldingen, logbestand, CLI) is inmiddels in het Engels
+vertaald, zodat ook niet-Nederlandstalige collega's de tool kunnen
+gebruiken.
+
 ### 3.4 Nice-to-haves / later
 - Verbeterde automatische detectie (zie route's in sectie 4) — kan
   parallel of ná de UI-versie, vermindert het aantal handmatige correcties
@@ -230,11 +245,22 @@ PROJECT_SPEC.md   - dit document
 
 ## 7. Vragen om bij de start van de Claude Code-sessie te beantwoorden
 
+**Inmiddels allemaal beantwoord tijdens de bouw:**
+
 1. Flask of Streamlit (of iets anders) voor de lokale UI-laag?
+   → **Flask**, met een gevendorde Konva.js-canvaslaag voor de
+   correctiestap (geen CDN, alles offline).
 2. Hoe wordt de correctiestap precies bediend — canvas met sleepbare
    rechthoeken (bv. via een JS-canvaslaag), of eenvoudiger met een lijst
    + coördinaatvelden?
+   → Canvas met sleepbare/resizebare rechthoeken (`Konva.Transformer`),
+   incl. Shift+slepen om meerdere vakken tegelijk te selecteren, zie 3.3.
 3. Welke minimale Windows-versie/Python-runtime-bundeling geeft de
    kleinste/robuustste `.exe`?
+   → Python 3.11, PyInstaller `--onefile`, gebouwd via GitHub Actions op
+   `windows-latest` bij elke release; werkt op Windows 10/11 64-bit.
 4. Wordt Route 1 (sectie 4) meteen meegenomen in v2, of pas na de eerste
    werkende UI-versie?
+   → Route 1-spike is los uitgevoerd en heeft niets opgeleverd voor het
+   geteste brontype (zie `scripts/spikes/ROUTE1_FINDINGS.md`) — flood-fill
+   blijft de aanpak voor ruimtedetectie.
