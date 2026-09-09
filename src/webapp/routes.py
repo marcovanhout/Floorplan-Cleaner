@@ -8,15 +8,21 @@ import fitz
 from flask import Blueprint, abort, jsonify, render_template, request, send_file
 
 from src.core.constants import DEFAULT_DROP_KEYWORDS, DEFAULT_KEEP_KEYWORDS
-from src.core.layers import list_layers, recommend_layers
+from src.core.layers import apply_explicit_layer_selection, list_layers, recommend_layers
 from src.core.pipeline import export_rooms, rotate_clockwise, run_clean, run_room_detection
 from src.core.raster import is_tesseract_available
-from src.core.render import image_to_png_bytes
+from src.core.render import force_black_lines, image_to_png_bytes, render_page
 from src.core.types import RoomRecord
 
 from .state import cleanup_job, create_job, get_job
 
 bp = Blueprint("floorplan", __name__)
+
+# Streefbreedte (in pixels) voor de live laag-voorbeeldafbeelding op de
+# uploadpagina - onafhankelijk van de door de gebruiker gekozen
+# renderresolutie, puur om elke keer dat een vakje wordt aan/uitgevinkt
+# snel te blijven renderen, ook bij een groot A0-bouwtekening-formaat.
+PREVIEW_TARGET_WIDTH_PT = 900
 
 
 def _room_to_dict(room: RoomRecord) -> dict:
@@ -80,6 +86,33 @@ def upload():
         "layers": [layer["name"] for layer in layers],
         "recommended_layers": sorted(recommended),
     })
+
+
+@bp.route("/jobs/<job_id>/preview", methods=["POST"])
+def preview(job_id):
+    """Snel voorbeeld van de opgeschoonde plattegrond voor de HUIDIGE
+    laagkeuze in de laag-kiezer - geen ruimtedetectie, lagere resolutie
+    dan de uiteindelijke export (zie PREVIEW_TARGET_WIDTH_PT), puur zodat
+    je meteen ziet wat een aan/uitgevinkte laag oplevert."""
+    job = get_job(job_id)
+    if job is None:
+        abort(404, "Onbekende of verlopen job.")
+
+    page_no = int(request.form.get("page", 0) or 0)
+    selected_layers = request.form.getlist("layers")
+
+    doc = fitz.open(job.pdf_path)
+    if page_no < 0 or page_no >= doc.page_count:
+        abort(400, f"Ongeldig paginanummer: {page_no} (document heeft {doc.page_count} pagina's).")
+    if not list_layers(doc):
+        abort(400, "Deze PDF heeft geen lagen om een voorbeeld van te maken.")
+    page = doc[page_no]
+
+    apply_explicit_layer_selection(doc, selected_layers)
+    preview_scale = max(0.3, min(2.0, PREVIEW_TARGET_WIDTH_PT / page.rect.width))
+    img = force_black_lines(render_page(page, preview_scale, alpha=True))
+
+    return send_file(io.BytesIO(image_to_png_bytes(img)), mimetype="image/png")
 
 
 @bp.route("/jobs/<job_id>/process", methods=["POST"])
