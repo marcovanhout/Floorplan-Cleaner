@@ -10,7 +10,7 @@ def render_page(page, scale: float, alpha: bool = True) -> Image.Image:
     pix = page.get_pixmap(matrix=mat, alpha=alpha)
     mode = "RGBA" if pix.alpha else "RGB"
     img = Image.frombytes(mode, (pix.width, pix.height), pix.samples)
-    return img.convert("RGBA")
+    return img.convert("RGBA") if alpha else img
 
 
 def force_black_lines(img_rgba: Image.Image) -> Image.Image:
