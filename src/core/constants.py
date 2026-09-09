@@ -9,7 +9,10 @@ import re
 DEFAULT_KEEP_KEYWORDS = [
     "A-WALL", "A-DOOR", "A-GLAZ", "S-STRS", "S-STAIR", "A-STAIR",
     "I-WALL",
-    "MUUR", "DEUR", "RAAM", "TRAP", "GLAS", "KOZIJN",
+    # "WAND" is het gangbare synoniem voor "MUUR" (bv. "0_wanden"); "RAMEN"
+    # apart naast "RAAM" omdat het Nederlandse meervoud onregelmatig is
+    # ("raam" -> "ramen", niet "raamen") en dus geen substring-match geeft.
+    "MUUR", "WAND", "DEUR", "RAAM", "RAMEN", "TRAP", "GLAS", "KOZIJN",
 ]
 
 DEFAULT_DROP_KEYWORDS = [
