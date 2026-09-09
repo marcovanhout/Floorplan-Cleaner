@@ -1,6 +1,7 @@
 (function () {
   const form = document.getElementById("upload-form");
   const pdfInput = document.getElementById("pdf");
+  const pdfFilenameEl = document.getElementById("pdf-filename");
   const pageInput = document.getElementById("page");
   const scaleInput = document.getElementById("scale");
   const submitBtn = document.getElementById("upload-submit");
@@ -200,6 +201,7 @@
     status.hidden = true;
 
     const file = pdfInput.files[0];
+    pdfFilenameEl.textContent = file ? file.name : "No file chosen";
     if (!file) return;
 
     layersLoadingEl.hidden = false;
