@@ -12,7 +12,7 @@ om te committen conform PROJECT_SPEC.md sectie 5.
 
 import os
 
-import fitz
+import pymupdf as fitz
 
 
 def make_simple_floorplan(path: str) -> None:

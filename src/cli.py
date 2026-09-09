@@ -18,7 +18,7 @@ GEBRUIK
 import argparse
 import os
 
-import fitz  # PyMuPDF
+import pymupdf as fitz
 
 from .core.constants import DEFAULT_DROP_KEYWORDS, DEFAULT_KEEP_KEYWORDS
 from .core.layers import list_layers

@@ -8,7 +8,7 @@ gedrag heeft veranderd.
 import numpy as np
 
 import floorplan_cleaner as v1  # uit Plattegrond_Schoonmaker_v1/, via conftest.py sys.path
-import fitz
+import pymupdf as fitz
 
 from src.core.export import save_room_crops
 from src.core.pipeline import run_clean, run_room_detection

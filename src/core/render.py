@@ -1,6 +1,6 @@
 """Pagina-rendering en normalisatie naar zuiver zwarte lijnen."""
 
-import fitz  # PyMuPDF
+import pymupdf as fitz
 import numpy as np
 from PIL import Image
 
