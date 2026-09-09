@@ -4,7 +4,7 @@ import io
 import os
 import shutil
 
-import fitz
+import pymupdf as fitz
 from flask import Blueprint, abort, jsonify, render_template, request, send_file
 
 from src.core.constants import DEFAULT_DROP_KEYWORDS, DEFAULT_KEEP_KEYWORDS

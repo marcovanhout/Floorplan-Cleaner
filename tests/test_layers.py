@@ -3,7 +3,7 @@ de checkboxen in de UI) en apply_explicit_layer_selection() (daadwerkelijk
 een expliciete, door de gebruiker gekozen laagset toepassen i.p.v. gokken
 op keywoorden - elke tekenaar noemt lagen immers anders)."""
 
-import fitz
+import pymupdf as fitz
 
 from src.core.constants import DEFAULT_DROP_KEYWORDS, DEFAULT_KEEP_KEYWORDS
 from src.core.layers import (
