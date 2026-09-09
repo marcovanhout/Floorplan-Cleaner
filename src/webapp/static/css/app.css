@@ -259,15 +259,23 @@ button.tool-btn.active {
 .toolbar button:not(.primary):not(.active) { background: var(--panel); box-shadow: var(--shadow-sm); }
 .toolbar button.tool-btn.active { box-shadow: none; }
 
-.warnings {
-  background: var(--warning-bg);
-  border: 1px solid var(--warning-border);
+.tool-btn-link {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font);
+  font-size: 14px;
+  font-weight: 500;
+  padding: 9px 15px;
   border-radius: var(--radius-sm);
-  padding: 12px 14px;
-  font-size: 13px;
-  line-height: 1.6;
-  white-space: pre-line;
+  border: 1px solid var(--border-strong);
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
+.tool-btn-link:hover { background: var(--bg); border-color: var(--border-strong); }
 
 .stage-container {
   border: 1px solid var(--border);

@@ -3,7 +3,6 @@
   const jobId = document.querySelector(".correct-page").dataset.jobId;
   const loadingEl = document.getElementById("loading");
   const statusEl = document.getElementById("status-msg");
-  const warningsEl = document.getElementById("warnings");
 
   const ROOM_COLOR = "#2f6f4f";
   const ROOM_COLOR_SELECTED = "#c9622a";
@@ -16,6 +15,9 @@
   let fitScale = 1;
   let zoom = 1;
   let tool = "select"; // "select" | "draw"
+  // Waarschuwt bij "Terug" als er nog niet-geëxporteerde wijzigingen zijn
+  // (correcties leven alleen client-side totdat er geëxporteerd wordt).
+  let hasUnsavedChanges = false;
   // Volgorde van selectie. Klikken/shift-klikken houdt dit op max 2 (voor
   // samenvoegen); marquee-selectie (zie setupMarqueeSelect) kan er meer in
   // zetten - "Samenvoegen" blijft dan uit (zie updateToolbarState), maar
@@ -38,15 +40,6 @@
 
   function clearStatus() {
     statusEl.hidden = true;
-  }
-
-  function showWarnings(list) {
-    if (!list || list.length === 0) {
-      warningsEl.hidden = true;
-      return;
-    }
-    warningsEl.hidden = false;
-    warningsEl.textContent = list.join("\n");
   }
 
   // ---- data <-> canvas conversie -----------------------------------
@@ -244,6 +237,7 @@
 
     room.bbox = [Math.round(x0), Math.round(y0), Math.round(x0 + width), Math.round(y0 + height)];
     room.source = room.source === "auto" ? "user-edited" : room.source;
+    hasUnsavedChanges = true;
   }
 
   // ---- hernoemen (HTML input overlay op Konva.Text) ----------------------
@@ -277,6 +271,7 @@
       if (room.source === "auto") room.source = "user-edited";
       syncNodeToRoom(room);
       document.body.removeChild(input);
+      hasUnsavedChanges = true;
     }
     input.addEventListener("blur", commit);
     input.addEventListener("keydown", (e) => {
@@ -301,6 +296,7 @@
     });
     selectedIds = [];
     applySelection();
+    hasUnsavedChanges = true;
   }
 
   function mergeSelected() {
@@ -335,6 +331,7 @@
     buildRoomNode(merged);
     selectedIds = [];
     applySelection();
+    hasUnsavedChanges = true;
   }
 
   // ---- nieuw vak tekenen -----------------------------------------------
@@ -420,6 +417,7 @@
       setTool("select");
       selectRoom(room.id, false);
       startRename(room.id);
+      hasUnsavedChanges = true;
       // mousedown EN mouseup van deze teken-actie vonden beide plaats op de
       // achtergrond, dus Konva vuurt hierna nog een synthetische "click" op
       // diezelfde achtergrond af - zonder deze vlag zou de stage-click-
@@ -657,6 +655,7 @@
       await loadBackgroundImage(`/jobs/${jobId}/image?t=${Date.now()}`);
       fitToContainer();
       redrawAll();
+      hasUnsavedChanges = true;
     } catch (err) {
       showStatus("Roteren mislukt: " + err.message, true);
     }
@@ -736,7 +735,6 @@
     imageWidth = data.width;
     imageHeight = data.height;
     rooms = data.rooms.map((r) => ({ ...r }));
-    showWarnings(data.warnings);
     loadingEl.hidden = true;
 
     try {
@@ -781,6 +779,12 @@
     });
 
     document.getElementById("btn-export").addEventListener("click", doExport);
+
+    document.getElementById("btn-back").addEventListener("click", (e) => {
+      if (hasUnsavedChanges && !window.confirm("Nog niet-geëxporteerde wijzigingen gaan dan verloren. Toch teruggaan naar de startpagina?")) {
+        e.preventDefault();
+      }
+    });
   }
 
   async function doExport() {
@@ -798,6 +802,7 @@
       }
       const data = await resp.json();
       clearStatus();
+      hasUnsavedChanges = false;
       const resultEl = document.getElementById("export-result");
       const link = document.getElementById("download-link");
       link.href = data.download_url;
