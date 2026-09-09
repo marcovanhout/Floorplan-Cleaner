@@ -2,48 +2,47 @@
 {% block content %}
 <div class="correct-page" data-job-id="{{ job_id }}">
   <div class="toolbar">
-    <a href="/" id="btn-back" class="tool-btn-link" title="Terug naar startpagina">← Terug</a>
+    <a href="/" id="btn-back" class="tool-btn-link" title="Back to the start page">← Back</a>
     <span class="spacer"></span>
-    <button id="tool-select" class="tool-btn active" data-tool="select" title="Selecteren/slepen/resizen">Selecteren</button>
-    <button id="tool-draw" class="tool-btn" data-tool="draw" title="Nieuw vak tekenen">+ Vak tekenen</button>
-    <button id="btn-merge" disabled title="Selecteer 2 vakken om samen te voegen">Samenvoegen</button>
-    <button id="btn-delete" disabled title="Selecteer een vak om te verwijderen">Verwijderen</button>
+    <button id="tool-select" class="tool-btn active" data-tool="select" title="Select/drag/resize">Select</button>
+    <button id="tool-draw" class="tool-btn" data-tool="draw" title="Draw a new box">+ Draw box</button>
+    <button id="btn-merge" disabled title="Select 2 boxes to merge">Merge</button>
+    <button id="btn-delete" disabled title="Select a box to delete">Delete</button>
     <span class="spacer"></span>
-    <button id="btn-zoom-in" title="Inzoomen">+</button>
-    <button id="btn-zoom-out" title="Uitzoomen">-</button>
-    <button id="btn-zoom-fit" title="Passend maken">Fit</button>
-    <button id="btn-rotate" title="90 graden roteren (met de klok mee)">⟳ Roteren</button>
-    <span class="rotate-angle-group" title="Roteer met een zelf ingevoerde hoek (met de klok mee; negatief voor tegen de klok in)">
+    <button id="btn-zoom-in" title="Zoom in">+</button>
+    <button id="btn-zoom-out" title="Zoom out">-</button>
+    <button id="btn-zoom-fit" title="Fit to view">Fit</button>
+    <button id="btn-rotate" title="Rotate 90 degrees (clockwise)">⟳ Rotate</button>
+    <span class="rotate-angle-group" title="Rotate by a custom angle (clockwise; negative for counter-clockwise)">
       <input type="number" id="rotate-angle-input" value="1" step="0.5">
-      <button id="btn-rotate-angle">° Roteren</button>
+      <button id="btn-rotate-angle">° Rotate</button>
     </span>
     <span class="spacer"></span>
-    <button id="btn-export" class="primary">Exporteren</button>
+    <button id="btn-export" class="primary">Export</button>
   </div>
 
   <p id="status-msg" class="status" hidden></p>
 
   <div id="stage-container" class="stage-container">
-    <p id="loading" class="status">Bezig met laden...</p>
+    <p id="loading" class="status">Loading...</p>
   </div>
 
   <p class="hint">
-    Klik een vak om te selecteren (slepen/resizen), shift-klik een tweede vak om
-    samen te voegen, dubbelklik een naam om te hernoemen. "+ Vak tekenen" en dan
-    slepen om een gemist vak zelf in te tekenen. Sleep op de lege achtergrond om
-    de tekening te verschuiven (pannen), of houd Shift ingedrukt tijdens het
-    slepen om een selectiekader te tekenen en meerdere vakken in één keer te
-    selecteren (handig om ze daarna allemaal tegelijk te verwijderen). Scroll
-    met het muiswiel om in/uit te zoomen op de plek van de muis. "Roteren"
-    draait 90 graden per klik; het invoerveld ernaast draait met een zelf
-    gekozen hoek (bijvoorbeeld om een scheve scan recht te zetten) - let op:
-    bij een grote afwijking van een rechte hoek worden de rechte
-    ruimte-vakjes dan wat ruimer dan de ruimte zelf.
+    Click a box to select it (drag/resize), shift-click a second box to merge
+    them, double-click a name to rename it. "+ Draw box" and then drag to draw
+    a missed box yourself. Drag on the empty background to pan the drawing, or
+    hold Shift while dragging to draw a selection box and select multiple
+    boxes at once (handy for deleting them all together). Scroll with the
+    mouse wheel to zoom in/out at the cursor position. "Rotate" turns 90
+    degrees per click; the input field next to it rotates by a custom angle
+    (for example to straighten a skewed scan) - note: at a large deviation
+    from a right angle, the straight room boxes will then be somewhat looser
+    than the room itself.
   </p>
 
   <div id="export-result" class="export-result" hidden>
-    <p>Export klaar.</p>
-    <a id="download-link" href="#" class="primary-link">Download ruimtes.zip</a>
+    <p>Export complete.</p>
+    <a id="download-link" href="#" class="primary-link">Download rooms.zip</a>
   </div>
 </div>
 {% endblock %}

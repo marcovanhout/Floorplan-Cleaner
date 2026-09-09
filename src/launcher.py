@@ -31,8 +31,8 @@ def main():
     print("=" * 60)
     print("  Floorplan cleaner")
     print("=" * 60)
-    print(f"  Server draait op: {url}")
-    print("  Sluit dit venster om de server te stoppen.")
+    print(f"  Server running at: {url}")
+    print("  Close this window to stop the server.")
     print()
 
     threading.Timer(0.75, lambda: webbrowser.open(url)).start()

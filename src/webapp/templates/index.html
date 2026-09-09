@@ -3,25 +3,25 @@
 <form id="upload-form" class="upload-form">
   <div class="form-narrow">
     <div class="field">
-      <label for="pdf">Plattegrond-PDF</label>
+      <label for="pdf">Floorplan PDF</label>
       <input type="file" id="pdf" name="pdf" accept="application/pdf" required>
     </div>
 
     <div class="field-row">
       <div class="field">
-        <label for="page">Pagina</label>
+        <label for="page">Page</label>
         <input type="number" id="page" name="page" value="0" min="0">
       </div>
       <div class="field">
-        <label for="scale">Renderresolutie (schaal)</label>
+        <label for="scale">Render resolution (scale)</label>
         <input type="number" id="scale" name="scale" value="4" min="1" max="8" step="0.5">
       </div>
     </div>
     <p class="hint">
-      Pagina: welke pagina van de PDF verwerkt moet worden (bij de meeste tekeningen is dat
-      gewoon pagina 0, de eerste). Renderresolutie: hoe scherp de tekening wordt omgezet —
-      4 is een goede standaardwaarde, alleen bij een heel grote of gedetailleerde tekening
-      zou je 'm willen verhogen.
+      Page: which page of the PDF to process (for most drawings that's just page 0,
+      the first one). Render resolution: how sharp the drawing is converted —
+      4 is a good default, only increase it for a very large or highly
+      detailed drawing.
     </p>
 
     <div class="field checkbox-field">
@@ -32,43 +32,43 @@
           name="force_raster"
           data-tesseract-available="{{ 'true' if tesseract_available else 'false' }}"
         >
-        Forceer beeldherkenning (MODE B), ook als er CAD-lagen zijn
+        Force image recognition (MODE B), even if CAD layers are present
       </label>
     </div>
 
     <p id="tesseract-warning" class="hint hint-warning" hidden>
-      Tesseract-OCR is niet gevonden op dit systeem. MODE B werkt dan zonder automatische
-      tekstverwijdering/naamherkenning - de correctiestap in de volgende pagina blijft
-      gewoon bruikbaar om ruimtes handmatig te benoemen.
+      Tesseract-OCR was not found on this system. MODE B will then work without
+      automatic text removal/name recognition - the correction step on the next
+      page is still usable to name rooms manually.
     </p>
 
-    <p id="layers-loading" class="status" hidden>Bestand wordt ingelezen...</p>
+    <p id="layers-loading" class="status" hidden>Reading file...</p>
   </div>
 
   <div id="layers-section" class="field" hidden>
-    <label>Lagen</label>
+    <label>Layers</label>
     <p class="hint">
-      Dit zijn de CAD-lagen uit jouw PDF. We hebben er alvast een paar aangevinkt op basis
-      van de laagnaam (muren/deuren/ramen e.d.) — controleer of dat klopt en vink zelf aan
-      wat we gemist hebben. Elke tekenaar noemt lagen anders, dus zie dit als een voorstel,
-      geen garantie.
+      These are the CAD layers found in your PDF. We've already checked a few
+      based on the layer name (walls/doors/windows etc.) — double-check that's
+      right and check anything we missed yourself. Every drafter names layers
+      differently, so treat this as a suggestion, not a guarantee.
     </p>
     <p class="layers-toggle-all">
-      <a href="#" id="layers-select-all">Alles aan</a> · <a href="#" id="layers-select-none">Alles uit</a>
+      <a href="#" id="layers-select-all">Select all</a> · <a href="#" id="layers-select-none">Select none</a>
     </p>
 
     <div class="layers-columns">
       <div id="layers-list" class="layers-list"></div>
 
       <div id="layers-preview-box" class="layers-preview-box">
-        <img id="layers-preview-img" alt="Voorbeeld van de opgeschoonde plattegrond met de huidige laagkeuze" hidden>
-        <p id="layers-preview-placeholder" class="hint">Voorbeeld verschijnt hier zodra je lagen aan/uit zet.</p>
+        <img id="layers-preview-img" alt="Preview of the cleaned floorplan with the current layer selection" hidden>
+        <p id="layers-preview-placeholder" class="hint">The preview appears here once you toggle a layer on/off.</p>
       </div>
     </div>
   </div>
 
   <div class="form-narrow">
-    <button type="submit" id="upload-submit" disabled>Verwerken</button>
+    <button type="submit" id="upload-submit" disabled>Process</button>
     <p id="upload-status" class="status" hidden></p>
   </div>
 </form>

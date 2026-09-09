@@ -100,7 +100,7 @@
         URL.revokeObjectURL(newUrl);
         return;
       }
-      if (!dims) throw new Error("Kon voorbeeldafbeelding niet laden.");
+      if (!dims) throw new Error("Could not load the preview image.");
 
       previewImgEl.src = newUrl;
       previewImgEl.hidden = false;
@@ -118,7 +118,7 @@
     } catch (err) {
       // Een mislukt voorbeeld mag de rest van de flow niet blokkeren - het
       // vorige voorbeeld (indien er een was) blijft gewoon staan.
-      console.warn("Voorbeeld renderen mislukt:", err);
+      console.warn("Failed to render preview:", err);
     } finally {
       if (mySeq === previewRequestSeq) previewBoxEl.classList.remove("loading");
     }
@@ -209,7 +209,7 @@
       const resp = await fetch("/upload", { method: "POST", body });
       if (!resp.ok) {
         const text = await resp.text();
-        throw new Error(text || `Serverfout (${resp.status})`);
+        throw new Error(text || `Server error (${resp.status})`);
       }
       const data = await resp.json();
       currentJobId = data.job_id;
@@ -222,7 +222,7 @@
     } catch (err) {
       status.hidden = false;
       status.classList.add("error");
-      status.textContent = "Bestand inlezen mislukt: " + err.message;
+      status.textContent = "Failed to read the file: " + err.message;
     } finally {
       layersLoadingEl.hidden = true;
     }
@@ -236,7 +236,7 @@
     submitBtn.disabled = true;
     status.hidden = false;
     status.classList.remove("error");
-    status.textContent = "Bezig met verwerken...";
+    status.textContent = "Processing...";
 
     try {
       // Het bestand zelf is al bij /upload verstuurd - hier alleen de
@@ -252,13 +252,13 @@
       const resp = await fetch(`/jobs/${currentJobId}/process`, { method: "POST", body });
       if (!resp.ok) {
         const text = await resp.text();
-        throw new Error(text || `Serverfout (${resp.status})`);
+        throw new Error(text || `Server error (${resp.status})`);
       }
       const data = await resp.json();
       window.location.href = data.redirect;
     } catch (err) {
       status.classList.add("error");
-      status.textContent = "Mislukt: " + err.message;
+      status.textContent = "Failed: " + err.message;
       submitBtn.disabled = false;
     }
   });

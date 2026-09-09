@@ -22,7 +22,7 @@ def test_save_room_crops_names_and_numbers_duplicates(tmp_path):
 
     assert filenames["room_1"] == "toilet_1.png"
     assert filenames["room_2"] == "toilet_2.png"
-    assert filenames["room_3"] == "ruimte_01.png"
+    assert filenames["room_3"] == "room_01.png"
     for fname in filenames.values():
         assert (out_dir / fname).exists()
 
@@ -47,7 +47,7 @@ def test_write_room_log_reports_missing_names(tmp_path):
     content = log_path.read_text(encoding="utf-8")
     assert "toilet.png  <-  Toilet" in content
     assert "Berging (code BG-2.02)" in content
-    assert "kon niet aan een gedetecteerd ruimte-vlak gekoppeld worden" in content
+    assert "could not be linked to a detected room area" in content
     assert "Toilet (code TL-1.01)" not in content  # kreeg wel een PNG, hoort niet in de lijst
 
 
@@ -75,4 +75,4 @@ def test_write_room_log_reflects_user_deletion_after_correction(tmp_path):
     write_room_log(str(log_path), "input.pdf", rooms, filenames, anchor_log, mode_a=True)
 
     content = log_path.read_text(encoding="utf-8")
-    assert "verwijderd of samengevoegd tijdens handmatige correctie" in content
+    assert "deleted or merged during manual correction" in content
