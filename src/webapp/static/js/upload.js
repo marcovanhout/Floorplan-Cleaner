@@ -16,9 +16,15 @@
   const selectAllLink = document.getElementById("layers-select-all");
   const selectNoneLink = document.getElementById("layers-select-none");
 
+  const previewBoxEl = document.getElementById("layers-preview-box");
+  const previewImgEl = document.getElementById("layers-preview-img");
+  const previewPlaceholderEl = document.getElementById("layers-preview-placeholder");
+
   // Pas gezet zodra /upload (stap 1: bestand inlezen + lagen inventariseren)
   // is geslaagd - de daadwerkelijke verwerking (submit) heeft dit nodig.
   let currentJobId = null;
+  let previewDebounceTimer = null;
+  let previewRequestSeq = 0; // negeert trage/oude responses die na een nieuwere aankomen
 
   // Alleen relevant zodra iemand MODE B daadwerkelijk afdwingt - voor de
   // normale AutoCAD-PDF's (MODE A, geen OCR nodig) is deze melding ruis.
@@ -46,17 +52,63 @@
   selectAllLink.addEventListener("click", (e) => {
     e.preventDefault();
     layersListEl.querySelectorAll("input[type=checkbox]").forEach((cb) => (cb.checked = true));
+    schedulePreview();
   });
   selectNoneLink.addEventListener("click", (e) => {
     e.preventDefault();
     layersListEl.querySelectorAll("input[type=checkbox]").forEach((cb) => (cb.checked = false));
+    schedulePreview();
   });
+
+  // ---- laag-voorbeeld (live bijgewerkt bij elke aan/uitgevinkte laag) -----
+
+  function schedulePreview() {
+    if (!currentJobId) return;
+    clearTimeout(previewDebounceTimer);
+    // Kort debounced: bij snel achter elkaar aanklikken van meerdere vakjes
+    // hoeft niet elke tussenstap gerenderd te worden, alleen de laatste.
+    previewDebounceTimer = setTimeout(updatePreview, 350);
+  }
+
+  async function updatePreview() {
+    const mySeq = ++previewRequestSeq;
+    const checked = Array.from(layersListEl.querySelectorAll("input[type=checkbox]:checked")).map(
+      (cb) => cb.value
+    );
+    previewBoxEl.classList.add("loading");
+    try {
+      const body = new FormData();
+      body.append("page", pageInput.value);
+      checked.forEach((name) => body.append("layers", name));
+      const resp = await fetch(`/jobs/${currentJobId}/preview`, { method: "POST", body });
+      if (mySeq !== previewRequestSeq) return; // ondertussen een nieuwere aanvraag onderweg
+      if (!resp.ok) throw new Error(await resp.text());
+      const blob = await resp.blob();
+      const oldUrl = previewImgEl.src;
+      previewImgEl.src = URL.createObjectURL(blob);
+      previewImgEl.hidden = false;
+      previewPlaceholderEl.hidden = true;
+      if (oldUrl && oldUrl.startsWith("blob:")) URL.revokeObjectURL(oldUrl);
+    } catch (err) {
+      // Een mislukt voorbeeld mag de rest van de flow niet blokkeren - het
+      // vorige voorbeeld (indien er een was) blijft gewoon staan.
+      console.warn("Voorbeeld renderen mislukt:", err);
+    } finally {
+      if (mySeq === previewRequestSeq) previewBoxEl.classList.remove("loading");
+    }
+  }
+
+  layersListEl.addEventListener("change", schedulePreview);
+  pageInput.addEventListener("change", schedulePreview);
 
   async function inspectSelectedFile() {
     currentJobId = null;
+    previewRequestSeq++; // eventuele nog lopende preview-aanvraag van een vorig bestand negeren
     submitBtn.disabled = true;
     layersSectionEl.hidden = true;
     layersListEl.innerHTML = "";
+    previewImgEl.hidden = true;
+    previewPlaceholderEl.hidden = false;
     status.hidden = true;
 
     const file = pdfInput.files[0];
@@ -76,6 +128,7 @@
       if (data.layers && data.layers.length > 0) {
         renderLayerCheckboxes(data.layers, data.recommended_layers);
         layersSectionEl.hidden = false;
+        updatePreview();
       }
       submitBtn.disabled = false;
     } catch (err) {
