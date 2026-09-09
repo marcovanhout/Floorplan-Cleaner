@@ -1,12 +1,14 @@
 """Flask-routes: upload -> detecteren -> corrigeren (canvas) -> exporteren."""
 
 import io
+import json
 import math
 import os
 import shutil
 
 import pymupdf as fitz
 from flask import Blueprint, abort, jsonify, render_template, request, send_file
+from PIL import Image
 
 from src.core.constants import DEFAULT_DROP_KEYWORDS, DEFAULT_KEEP_KEYWORDS
 from src.core.layers import apply_explicit_layer_selection, list_layers, recommend_layers
@@ -248,6 +250,36 @@ def erase(job_id):
     job.clean_image = erase_rect(job.clean_image, x0, y0, x1, y1)
 
     return jsonify({"width": job.clean_image.width, "height": job.clean_image.height})
+
+
+@bp.route("/jobs/<job_id>/restore", methods=["POST"])
+def restore(job_id):
+    """'Undo': zet de afbeelding + ruimte-vakken terug naar een staat die de
+    client zelf heeft bewaard van vlak voor de laatste wijziging (roteren of
+    gummen - de enige acties die de afbeelding blijvend aanpassen; een
+    losstaande ruimte-vak-bewerking hoeft de server niet in, die leeft tot
+    het exporteren alleen client-side). Eenmalige undo, geen verdere
+    geschiedenis of redo - de client bewaart zelf maar 1 stap terug."""
+    job = get_job(job_id)
+    if job is None:
+        abort(404, "Unknown or expired job.")
+
+    file = request.files.get("image")
+    if not file:
+        abort(400, "Expected an 'image' file in the request body.")
+    try:
+        rooms = [_room_from_dict(r) for r in json.loads(request.form.get("rooms", "[]"))]
+    except (TypeError, ValueError):
+        abort(400, "Expected a JSON 'rooms' field in the request body.")
+
+    job.clean_image = Image.open(io.BytesIO(file.read())).convert("RGBA")
+    job.rooms = rooms
+
+    return jsonify({
+        "width": job.clean_image.width,
+        "height": job.clean_image.height,
+        "rooms": [_room_to_dict(r) for r in job.rooms],
+    })
 
 
 @bp.route("/jobs/<job_id>/export", methods=["POST"])
