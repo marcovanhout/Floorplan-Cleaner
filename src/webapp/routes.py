@@ -32,7 +32,9 @@ bp = Blueprint("floorplan", __name__)
 # uploadpagina - onafhankelijk van de door de gebruiker gekozen
 # renderresolutie, puur om elke keer dat een vakje wordt aan/uitgevinkt
 # snel te blijven renderen, ook bij een groot A0-bouwtekening-formaat.
-PREVIEW_TARGET_WIDTH_PT = 900
+# 1400 is een bewuste middenweg (was 900): scherper bij het inzoomen op
+# het voorbeeld, zonder dat elke laag-toggle merkbaar trager aanvoelt.
+PREVIEW_TARGET_WIDTH_PT = 1400
 
 
 def _room_to_dict(room: RoomRecord) -> dict:
