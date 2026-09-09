@@ -16,7 +16,11 @@
   let fitScale = 1;
   let zoom = 1;
   let tool = "select"; // "select" | "draw"
-  let selectedIds = []; // volgorde van selectie, max 2 (voor samenvoegen)
+  // Volgorde van selectie. Klikken/shift-klikken houdt dit op max 2 (voor
+  // samenvoegen); marquee-selectie (zie setupMarqueeSelect) kan er meer in
+  // zetten - "Samenvoegen" blijft dan uit (zie updateToolbarState), maar
+  // "Verwijderen" werkt gewoon voor elk aantal.
+  let selectedIds = [];
 
   let stage, bgLayer, roomLayer, transformer;
   let bgImageNode = null; // Konva.Image met de plattegrond-achtergrond
@@ -440,6 +444,7 @@
   function setupPanning() {
     stage.on("mousedown touchstart", (e) => {
       if (tool !== "select") return;
+      if (e.evt && e.evt.shiftKey) return; // Shift+slepen is marquee-selectie, zie setupMarqueeSelect()
       if (e.target !== stage && !e.target.hasName("bg-image")) return;
       panStart = { pointer: stage.getPointerPosition(), stagePos: stage.position() };
       didPan = false;
@@ -470,6 +475,76 @@
         panDetachedNodes = [];
         roomLayer.draw();
       }
+    });
+  }
+
+  // ---- marquee-selectie (Shift + slepen over meerdere vakken) -----------
+  //
+  // Bij een detectie met veel foutieve losse mini-vakjes (typisch bij een
+  // platte/OCR-gebaseerde plattegrond) is 1-voor-1 aanklikken omslachtig -
+  // Shift+slepen tekent een selectiekader en selecteert in één keer alle
+  // vakken die het raakt, waarna "Verwijderen" (of de Delete-toets) ze
+  // allemaal ineens weghaalt. Gewone (niet-Shift) sleep blijft pannen, zie
+  // setupPanning() hierboven.
+
+  let marqueeStart = null;
+  let marqueeRect = null;
+
+  function setupMarqueeSelect() {
+    stage.on("mousedown touchstart", (e) => {
+      if (tool !== "select" || !(e.evt && e.evt.shiftKey)) return;
+      if (e.target !== stage && !e.target.hasName("bg-image")) return;
+      marqueeStart = stagePointerToImagePoint();
+      marqueeRect = new Konva.Rect({
+        x: marqueeStart.x,
+        y: marqueeStart.y,
+        width: 0,
+        height: 0,
+        stroke: ROOM_COLOR_SELECTED,
+        dash: [4 / totalScale(), 4 / totalScale()],
+        strokeWidth: 2 / totalScale(),
+        fill: "rgba(201,98,42,0.08)",
+      });
+      roomLayer.add(marqueeRect);
+    });
+
+    stage.on("mousemove touchmove", () => {
+      if (!marqueeStart || !marqueeRect) return;
+      const cur = stagePointerToImagePoint();
+      const x0 = Math.min(marqueeStart.x, cur.x);
+      const y0 = Math.min(marqueeStart.y, cur.y);
+      const w = Math.abs(cur.x - marqueeStart.x);
+      const h = Math.abs(cur.y - marqueeStart.y);
+      marqueeRect.setAttrs({ x: x0, y: y0, width: w, height: h });
+      roomLayer.batchDraw();
+    });
+
+    stage.on("mouseup touchend", () => {
+      if (!marqueeStart || !marqueeRect) return;
+      const x0 = marqueeRect.x();
+      const y0 = marqueeRect.y();
+      const x1 = x0 + marqueeRect.width();
+      const y1 = y0 + marqueeRect.height();
+      marqueeRect.destroy();
+      marqueeRect = null;
+      marqueeStart = null;
+      roomLayer.draw();
+
+      // Elk vak dat het selectiekader RAAKT (overlap), niet alleen vakken
+      // die er volledig binnen vallen - vergevingsgezinder bij een kader
+      // dat niet exact om een cluster kleine vakjes heen past.
+      const hit = rooms.filter((r) => {
+        const [rx0, ry0, rx1, ry1] = r.bbox;
+        return rx0 < x1 && rx1 > x0 && ry0 < y1 && ry1 > y0;
+      });
+      if (hit.length === 0) return;
+      selectedIds = hit.map((r) => r.id);
+      applySelection();
+      // Zelfde reden als bij het tekenen van een nieuw vak: mousedown EN
+      // mouseup vonden beide op de achtergrond plaats, dus Konva vuurt
+      // hierna nog een synthetische "click" af die de selectie anders
+      // meteen weer zou opheffen.
+      suppressNextBackgroundClick = true;
     });
   }
 
@@ -646,6 +721,7 @@
 
     setupDrawing();
     setupPanning();
+    setupMarqueeSelect();
     setupWheelZoom();
 
     let resp;
