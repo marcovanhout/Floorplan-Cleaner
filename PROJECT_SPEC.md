@@ -156,7 +156,15 @@ Paint.
   parallel of ná de UI-versie, vermindert het aantal handmatige correcties
   maar is geen blocker voor v2-lancering.
 - Batchverwerking van meerdere PDF's achter elkaar.
-- Optie om een eigen keyword-lijst voor lagen op te slaan per klant/project.
+
+**Inmiddels gebouwd (was hier oorspronkelijk als idee genoteerd, maar
+anders opgelost dan gepland):** een eigen, op te slaan keyword-lijst per
+klant/project bleek niet nodig — elke tekenaar noemt lagen anders, dus een
+lijst zou toch nooit compleet zijn. In plaats daarvan kiest de gebruiker nu
+zelf, per upload, welke CAD-lagen meegenomen worden (met de laagnamen zelf
+zichtbaar, een op keywoorden gebaseerd voorstel vooraf aangevinkt, en een
+live, zoombaar/panbaar voorbeeld) — preciezer dan een keyword-lijst en
+zonder dat de gebruiker technische zoektermen hoeft te begrijpen.
 
 ---
 
