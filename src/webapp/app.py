@@ -11,6 +11,8 @@ from pathlib import Path
 
 from flask import Flask
 
+from ..version import get_version
+
 
 def _webapp_dir() -> Path:
     if getattr(sys, "frozen", False):
@@ -30,4 +32,9 @@ def create_app() -> Flask:
     from .routes import bp
 
     app.register_blueprint(bp)
+
+    @app.context_processor
+    def inject_version():
+        return {"app_version": get_version()}
+
     return app
