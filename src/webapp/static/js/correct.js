@@ -29,6 +29,75 @@
   let bgImageNode = null; // Konva.Image met de plattegrond-achtergrond
   const nodesById = new Map(); // room.id -> {group, rect, label}
 
+  // ---- undo (1 stap terug, geen redo) --------------------------------
+  //
+  // Ruimte-vak-bewerkingen leven alleen client-side (undo daarvan is dus
+  // simpel: de oude 'rooms'-array terugzetten). Roteren/gummen passen de
+  // afbeelding blijvend aan OP DE SERVER - om die ook terug te kunnen
+  // draaien bewaart de client zelf de laatst geladen afbeelding als Blob
+  // (zie loadBackgroundImage) en stuurt die bij undo terug naar een nieuwe
+  // /restore-route. Bewust maar 1 stap diep: dekt de praktische zorg
+  // ("oeps, verkeerd geveegd/gedraaid") zonder de complexiteit van een
+  // volledige geschiedenis + redo.
+  let currentImageBlob = null;
+  let undoSnapshot = null; // {rooms, imageBlob} | null
+
+  function captureUndoSnapshot(imageChanged) {
+    if (!currentImageBlob) return; // nog niet geladen, kan niet gebeuren na init()
+    // Bij een zuivere ruimte-vak-wijziging (slepen/hernoemen/samenvoegen/
+    // verwijderen/nieuw tekenen) verandert de afbeelding niet - undo daarvan
+    // hoeft dan de server niet in (zie undo() hieronder), alleen bij
+    // roteren/gummen is er ook een afbeelding-versie om terug te zetten.
+    undoSnapshot = { rooms: rooms.map((r) => ({ ...r })), imageBlob: imageChanged ? currentImageBlob : null };
+    document.getElementById("btn-undo").disabled = false;
+  }
+
+  async function undo() {
+    if (!undoSnapshot) return;
+    clearStatus();
+    const snap = undoSnapshot;
+    undoSnapshot = null; // eenmalig: meteen "verbruikt", geen redo
+    document.getElementById("btn-undo").disabled = true;
+    transformer.nodes([]);
+    selectedIds = [];
+
+    if (!snap.imageBlob) {
+      rooms = snap.rooms;
+      redrawAll();
+      hasUnsavedChanges = true;
+      return;
+    }
+    const prevWidth = imageWidth;
+    const prevHeight = imageHeight;
+    try {
+      const body = new FormData();
+      body.append("image", snap.imageBlob, "image.png");
+      body.append("rooms", JSON.stringify(snap.rooms));
+      const resp = await fetch(`/jobs/${jobId}/restore`, { method: "POST", body });
+      if (!resp.ok) {
+        const text = await resp.text();
+        throw new Error(text || `Server error (${resp.status})`);
+      }
+      const data = await resp.json();
+      imageWidth = data.width;
+      imageHeight = data.height;
+      rooms = data.rooms.map((r) => ({ ...r }));
+      await loadBackgroundImage(`/jobs/${jobId}/image?t=${Date.now()}`);
+      // Alleen als de afmetingen echt veranderd zijn (bv. undo van een
+      // rotatie) is fitToContainer() nodig - het huidige zoomniveau/pan
+      // klopt dan sowieso niet meer tegen de nieuwe afbeeldingsgrootte.
+      // Bij een gum-undo (afmetingen ongewijzigd) blijft de gebruiker
+      // gewoon op hetzelfde zoomniveau/dezelfde plek staan.
+      if (imageWidth !== prevWidth || imageHeight !== prevHeight) {
+        fitToContainer();
+      }
+      redrawAll();
+      hasUnsavedChanges = true;
+    } catch (err) {
+      showStatus("Undo failed: " + err.message, true);
+    }
+  }
+
   function totalScale() {
     return fitScale * zoom;
   }
@@ -214,6 +283,7 @@
   function onTransformOrDragEnd(room) {
     const nodes = nodesById.get(room.id);
     if (!nodes) return;
+    captureUndoSnapshot(false);
     const group = nodes.group;
     const rect = nodes.rect;
     const scaleX = group.scaleX();
@@ -268,6 +338,7 @@
     input.select();
 
     function commit() {
+      captureUndoSnapshot(false);
       room.name = input.value.trim() || null;
       if (room.source === "auto") room.source = "user-edited";
       syncNodeToRoom(room);
@@ -288,6 +359,7 @@
 
   function deleteSelected() {
     if (selectedIds.length === 0) return;
+    captureUndoSnapshot(false);
     transformer.nodes([]); // eerst loskoppelen, anders crasht Konva bij destroy() van een vastgehouden node
     rooms = rooms.filter((r) => !selectedIds.includes(r.id));
     selectedIds.forEach((id) => {
@@ -313,6 +385,7 @@
     const suggestedName = a.name || b.name || "";
     const name = window.prompt("Name for the merged room:", suggestedName);
     if (name === null) return; // geannuleerd
+    captureUndoSnapshot(false);
 
     const merged = {
       id: newRoomId(),
@@ -406,6 +479,7 @@
       const minSizeImgPx = 8 / totalScale(); // 8 schermpixels, omgerekend
       if (w < minSizeImgPx || h < minSizeImgPx) return;
 
+      captureUndoSnapshot(false);
       const room = {
         id: newRoomId(),
         bbox: [Math.round(x0), Math.round(y0), Math.round(x0 + w), Math.round(y0 + h)],
@@ -434,13 +508,15 @@
   // een ruimte-vak) - voor restjes die de automatische opschoning laat
   // staan (bv. tekst die OCR miste). Zelfde sleep-interactie als
   // setupDrawing() hierboven, maar het resultaat gaat naar de server i.p.v.
-  // een nieuw ruimte-vak aan te maken, en is niet ongedaan te maken.
+  // een nieuw ruimte-vak aan te maken. Met "Undo" (zie hierboven) 1 stap
+  // terug te draaien.
 
   let eraseRectPreview = null;
   let eraseStart = null;
 
   async function eraseRect(x0, y0, x1, y1) {
     clearStatus();
+    captureUndoSnapshot(true);
     try {
       const resp = await fetch(`/jobs/${jobId}/erase`, {
         method: "POST",
@@ -727,6 +803,7 @@
   // dezelfde manier.
   async function applyRotateResponse(fetchPromise, errorPrefix) {
     clearStatus();
+    captureUndoSnapshot(true);
     transformer.nodes([]); // loskoppelen: rooms/afbeelding worden zo vervangen
     selectedIds = [];
     try {
@@ -776,28 +853,43 @@
   // Laadt (of vervangt) de achtergrondafbeelding. Gebruikt zowel bij het
   // eerste laden als na het roteren (dan verandert alleen de servercontent
   // achter dezelfde/nieuwe url, niet de Konva-Image-node zelf).
-  function loadBackgroundImage(url) {
-    return new Promise((resolve, reject) => {
-      const imgObj = new Image();
-      imgObj.onload = () => {
-        if (bgImageNode) {
-          bgImageNode.image(imgObj);
-        } else {
-          bgImageNode = new Konva.Image({ image: imgObj, name: "bg-image" });
-          bgLayer.add(bgImageNode);
-        }
-        // Expliciet zetten i.p.v. op Konva's eigen default (= de natuurlijke
-        // afmeting van de <img>) vertrouwen: na roteren staan imageWidth/
-        // imageHeight (uit de server-respons) al vast VOORDAT deze functie
-        // wordt aangeroepen, dus dit is de betrouwbare bron.
-        bgImageNode.width(imageWidth);
-        bgImageNode.height(imageHeight);
-        bgLayer.draw();
-        resolve();
-      };
-      imgObj.onerror = () => reject(new Error("Failed to load the image."));
-      imgObj.src = url;
-    });
+  async function loadBackgroundImage(url) {
+    // Als Blob ophalen (i.p.v. de <img> rechtstreeks op de url te zetten) om
+    // 'm ook te kunnen bewaren als undo-snapshot (zie captureUndoSnapshot) -
+    // zonder aparte fetch zou een undo de afbeelding opnieuw van de server
+    // moeten terugvragen, die op dat moment alweer overschreven is.
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error("Failed to load the image.");
+    const blob = await resp.blob();
+    currentImageBlob = blob;
+    const objectUrl = URL.createObjectURL(blob);
+    try {
+      await new Promise((resolve, reject) => {
+        const imgObj = new Image();
+        imgObj.onload = () => {
+          if (bgImageNode) {
+            bgImageNode.image(imgObj);
+          } else {
+            bgImageNode = new Konva.Image({ image: imgObj, name: "bg-image" });
+            bgLayer.add(bgImageNode);
+          }
+          // Expliciet zetten i.p.v. op Konva's eigen default (= de natuurlijke
+          // afmeting van de <img>) vertrouwen: na roteren staan imageWidth/
+          // imageHeight (uit de server-respons) al vast VOORDAT deze functie
+          // wordt aangeroepen, dus dit is de betrouwbare bron.
+          bgImageNode.width(imageWidth);
+          bgImageNode.height(imageHeight);
+          bgLayer.draw();
+          resolve();
+        };
+        imgObj.onerror = () => reject(new Error("Failed to load the image."));
+        imgObj.src = objectUrl;
+      });
+    } finally {
+      // Veilig meteen vrijgeven: de <img> heeft de data al gedecodeerd zodra
+      // onload vuurt, de object-url zelf hoeft daarna niet meer te bestaan.
+      URL.revokeObjectURL(objectUrl);
+    }
   }
 
   // ---- init ----------------------------------------------------------------
@@ -870,6 +962,7 @@
     });
     document.getElementById("btn-delete").addEventListener("click", deleteSelected);
     document.getElementById("btn-merge").addEventListener("click", mergeSelected);
+    document.getElementById("btn-undo").addEventListener("click", undo);
     document.getElementById("btn-zoom-in").addEventListener("click", () => zoomBy(1.25));
     document.getElementById("btn-zoom-out").addEventListener("click", () => zoomBy(0.8));
     document.getElementById("btn-zoom-fit").addEventListener("click", () => {
@@ -886,6 +979,10 @@
       if ((e.key === "Delete" || e.key === "Backspace") && selectedIds.length && document.activeElement.tagName !== "INPUT") {
         e.preventDefault();
         deleteSelected();
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z" && document.activeElement.tagName !== "INPUT") {
+        e.preventDefault();
+        undo();
       }
     });
 

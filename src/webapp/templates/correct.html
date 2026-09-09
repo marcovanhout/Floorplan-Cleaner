@@ -9,6 +9,7 @@
     <button id="tool-erase" class="tool-btn" data-tool="erase" title="Draw a rectangle to erase it (make transparent)">⌫ Erase</button>
     <button id="btn-merge" disabled title="Select 2 boxes to merge">Merge</button>
     <button id="btn-delete" disabled title="Select a box to delete">Delete</button>
+    <button id="btn-undo" disabled title="Undo the last change">↶ Undo</button>
     <span class="spacer"></span>
     <button id="btn-zoom-in" title="Zoom in">+</button>
     <button id="btn-zoom-out" title="Zoom out">-</button>
@@ -39,7 +40,8 @@
     (for example to straighten a skewed scan) - note: at a large deviation
     from a right angle, the straight room boxes will then be somewhat looser
     than the room itself. "Erase" lets you drag a rectangle to permanently wipe
-    that part of the drawing (e.g. leftover text) - this cannot be undone.
+    that part of the drawing (e.g. leftover text). "Undo" reverts only the
+    single most recent change (no further history, no redo).
   </p>
 
   <div id="export-result" class="export-result" hidden>
