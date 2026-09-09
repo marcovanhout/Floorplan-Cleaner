@@ -57,7 +57,7 @@ def upload():
     startpunt (zie recommended), nooit de enige waarheid."""
     file = request.files.get("pdf")
     if not file or not file.filename:
-        abort(400, "Geen PDF geselecteerd.")
+        abort(400, "No PDF selected.")
 
     job = create_job(file.read(), file.filename)
     doc = fitz.open(job.pdf_path)
@@ -80,16 +80,16 @@ def preview(job_id):
     je meteen ziet wat een aan/uitgevinkte laag oplevert."""
     job = get_job(job_id)
     if job is None:
-        abort(404, "Onbekende of verlopen job.")
+        abort(404, "Unknown or expired job.")
 
     page_no = int(request.form.get("page", 0) or 0)
     selected_layers = request.form.getlist("layers")
 
     doc = fitz.open(job.pdf_path)
     if page_no < 0 or page_no >= doc.page_count:
-        abort(400, f"Ongeldig paginanummer: {page_no} (document heeft {doc.page_count} pagina's).")
+        abort(400, f"Invalid page number: {page_no} (document has {doc.page_count} pages).")
     if not list_layers(doc):
-        abort(400, "Deze PDF heeft geen lagen om een voorbeeld van te maken.")
+        abort(400, "This PDF has no layers to preview.")
     page = doc[page_no]
 
     apply_explicit_layer_selection(doc, selected_layers)
@@ -105,7 +105,7 @@ def process(job_id):
     (indien van toepassing) uit de laag-kiezer op de uploadpagina."""
     job = get_job(job_id)
     if job is None:
-        abort(404, "Onbekende of verlopen job.")
+        abort(404, "Unknown or expired job.")
 
     page_no = int(request.form.get("page", 0) or 0)
     scale = float(request.form.get("scale", 4.0) or 4.0)
@@ -113,7 +113,7 @@ def process(job_id):
 
     doc = fitz.open(job.pdf_path)
     if page_no < 0 or page_no >= doc.page_count:
-        abort(400, f"Ongeldig paginanummer: {page_no} (document heeft {doc.page_count} pagina's).")
+        abort(400, f"Invalid page number: {page_no} (document has {doc.page_count} pages).")
     page = doc[page_no]
 
     # Alleen als 'meesturen wat je hebt aangevinkt' zin heeft: had deze PDF
@@ -140,7 +140,7 @@ def process(job_id):
 def correct(job_id):
     job = get_job(job_id)
     if job is None:
-        abort(404, "Onbekende of verlopen job.")
+        abort(404, "Unknown or expired job.")
     return render_template("correct.html", job_id=job_id)
 
 
@@ -148,7 +148,7 @@ def correct(job_id):
 def detect(job_id):
     job = get_job(job_id)
     if job is None or job.clean_image is None:
-        abort(404, "Onbekende of verlopen job.")
+        abort(404, "Unknown or expired job.")
     return jsonify({
         "job_id": job.job_id,
         "image_url": f"/jobs/{job.job_id}/image",
@@ -163,7 +163,7 @@ def detect(job_id):
 def image(job_id):
     job = get_job(job_id)
     if job is None or job.clean_image is None:
-        abort(404, "Onbekende of verlopen job.")
+        abort(404, "Unknown or expired job.")
     return send_file(
         io.BytesIO(image_to_png_bytes(job.clean_image)),
         mimetype="image/png",
@@ -174,12 +174,12 @@ def image(job_id):
 def rotate(job_id):
     job = get_job(job_id)
     if job is None or job.clean_image is None:
-        abort(404, "Onbekende of verlopen job.")
+        abort(404, "Unknown or expired job.")
 
     body = request.get_json(force=True, silent=True) or {}
     rooms_payload = body.get("rooms")
     if not isinstance(rooms_payload, list):
-        abort(400, "Verwacht een lijst 'rooms' in de request-body.")
+        abort(400, "Expected a 'rooms' list in the request body.")
     rooms = [_room_from_dict(r) for r in rooms_payload]
 
     job.clean_image, job.rooms = rotate_clockwise(job.clean_image, rooms)
@@ -198,18 +198,18 @@ def rotate_angle(job_id):
     een hoek ver van een rechte hoek."""
     job = get_job(job_id)
     if job is None or job.clean_image is None:
-        abort(404, "Onbekende of verlopen job.")
+        abort(404, "Unknown or expired job.")
 
     body = request.get_json(force=True, silent=True) or {}
     rooms_payload = body.get("rooms")
     if not isinstance(rooms_payload, list):
-        abort(400, "Verwacht een lijst 'rooms' in de request-body.")
+        abort(400, "Expected a 'rooms' list in the request body.")
     try:
         degrees = float(body.get("degrees"))
     except (TypeError, ValueError):
-        abort(400, "Verwacht een numerieke 'degrees' in de request-body.")
+        abort(400, "Expected a numeric 'degrees' in the request body.")
     if not math.isfinite(degrees):
-        abort(400, "Ongeldige hoek.")
+        abort(400, "Invalid angle.")
     rooms = [_room_from_dict(r) for r in rooms_payload]
 
     job.clean_image, job.rooms = rotate_by_angle(job.clean_image, rooms, degrees)
@@ -225,12 +225,12 @@ def rotate_angle(job_id):
 def export(job_id):
     job = get_job(job_id)
     if job is None or job.clean_image is None:
-        abort(404, "Onbekende of verlopen job.")
+        abort(404, "Unknown or expired job.")
 
     body = request.get_json(force=True, silent=True) or {}
     rooms_payload = body.get("rooms")
     if not isinstance(rooms_payload, list):
-        abort(400, "Verwacht een lijst 'rooms' in de request-body.")
+        abort(400, "Expected a 'rooms' list in the request body.")
     rooms = [_room_from_dict(r) for r in rooms_payload]
     margin_frac = float(body.get("room_margin", 0.35) or 0.35)
 
@@ -242,8 +242,8 @@ def export(job_id):
 
     # De totale opgeschoonde plattegrond hoort ook in de export te zitten
     # (zie PROJECT_SPEC.md sectie 1), niet alleen de losse ruimte-PNG's.
-    base_name = os.path.splitext(job.pdf_original_name)[0] or "plattegrond"
-    job.clean_image.save(out_dir / f"{base_name}_schoon.png")
+    base_name = os.path.splitext(job.pdf_original_name)[0] or "floorplan"
+    job.clean_image.save(out_dir / f"{base_name}_clean.png")
 
     zip_base = job.tmp_dir / "export"
     zip_path = shutil.make_archive(str(zip_base), "zip", root_dir=str(out_dir))
@@ -260,12 +260,12 @@ def export(job_id):
 def download(job_id):
     job = get_job(job_id)
     if job is None or job.export_zip_path is None:
-        abort(404, "Nog niets geexporteerd voor deze job.")
+        abort(404, "Nothing exported yet for this job.")
     return send_file(
         job.export_zip_path,
         mimetype="application/zip",
         as_attachment=True,
-        download_name="ruimtes.zip",
+        download_name="rooms.zip",
     )
 
 

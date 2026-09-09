@@ -110,7 +110,7 @@ def clean_via_raster(
     if remove_text:
         if not is_tesseract_available():
             logger.warning(
-                "OCR-tekstverwijdering overgeslagen: Tesseract-OCR is niet beschikbaar op dit systeem."
+                "OCR text removal skipped: Tesseract-OCR is not available on this system."
             )
         else:
             import pytesseract
@@ -148,10 +148,10 @@ def clean_via_raster(
                         work[py0:py1, px0:px1] = [1, 1, 1]
                         erased += 1
                 logger.info(
-                    "OCR: %d tekstblokken weggehaald (0/90/180/270 graden gecontroleerd).", erased
+                    "OCR: %d text blocks removed (checked at 0/90/180/270 degrees).", erased
                 )
             except Exception as e:
-                logger.warning("OCR-tekstverwijdering overgeslagen (%s).", e)
+                logger.warning("OCR text removal skipped (%s).", e)
 
     gray = work.mean(axis=2)
     L = (gray * 255).astype(np.uint8)

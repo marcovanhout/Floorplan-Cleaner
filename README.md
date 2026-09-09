@@ -1,56 +1,56 @@
 # Floorplan cleaner
 
-Maakt van een (AutoCAD-geëxporteerde) PDF-plattegrond een schone PNG (alleen
-muren/deuren/ramen/trappen, zwarte lijnen, transparante achtergrond) en
-optioneel losse PNG's per ruimte. Draait volledig lokaal/offline als Windows
-desktop-app — geen tekeningdata verlaat de pc. Zie [PROJECT_SPEC.md](PROJECT_SPEC.md)
-voor de volledige achtergrond en scope.
+Turns an (AutoCAD-exported) PDF floorplan into a clean PNG (only
+walls/doors/windows/stairs, pure black lines, transparent background) and
+optionally separate PNGs per room. Runs entirely locally/offline as a Windows
+desktop app — no drawing data leaves the PC. See [PROJECT_SPEC.md](PROJECT_SPEC.md)
+for the full background and scope.
 
-## Gebruik (eindgebruiker)
+## Usage (end user)
 
-Download `FloorplanCleaner.exe` van de [releases](../../releases) en dubbelklik
-'m. Er verschijnt een consolevenster en de app opent in je browser op
-`http://127.0.0.1:<poort>`. Laat het consolevenster openstaan zolang je de app
-gebruikt; sluiten stopt de server.
+Download `FloorplanCleaner.exe` from the [releases](../../releases) and double-click
+it. A console window appears and the app opens in your browser at
+`http://127.0.0.1:<port>`. Leave the console window open while you use the app;
+closing it stops the server.
 
-**Windows kan bij het eerste starten een SmartScreen-melding tonen**
-("Windows heeft de pc beschermd") omdat de .exe niet digitaal ondertekend is.
-Kies "Meer info" → "Toch uitvoeren". Dit is een bekende beperking van
-ongesigneerde .exe's, geen fout in de app.
+**Windows may show a SmartScreen warning on first launch**
+("Windows protected your PC") because the .exe isn't digitally signed.
+Choose "More info" → "Run anyway". This is a known limitation of
+unsigned .exe's, not a bug in the app.
 
-**Tesseract-OCR** (optioneel) wordt niet meegeleverd. Die is alleen nodig voor
-MODE B (platgeslagen/gescande PDF's zonder CAD-lagen) om automatisch tekst te
-verwijderen; zonder Tesseract werkt MODE B nog steeds (kleurfilter +
-ruimtedetectie), alleen moet je dan zelf ruimtenamen intypen in de
-correctiestap. Installeren kan via de
-[Tesseract-OCR Windows-installer](https://github.com/UB-Mannheim/tesseract/wiki).
+**Tesseract-OCR** (optional) is not bundled. It's only needed for
+MODE B (flattened/scanned PDFs without CAD layers) to automatically remove
+text; without Tesseract, MODE B still works (color filter +
+room detection), you just have to type room names yourself in the
+correction step. Install it via the
+[Tesseract-OCR Windows installer](https://github.com/UB-Mannheim/tesseract/wiki).
 
-## Ontwikkelen
+## Development
 
 ```bash
 python -m venv .venv
 .venv\Scripts\pip install -r requirements-dev.txt
-.venv\Scripts\python -m src.launcher        # start de webapp lokaal
-.venv\Scripts\pytest tests/                 # testsuite
+.venv\Scripts\python -m src.launcher        # run the webapp locally
+.venv\Scripts\pytest tests/                 # test suite
 ```
 
-Herbruikbare verwerkingslogica staat in `src/core/` (los van Flask/CLI), de
-webapp in `src/webapp/`, en de dunne CLI-wrapper in `src/cli.py`
+Reusable processing logic lives in `src/core/` (independent of Flask/CLI), the
+webapp in `src/webapp/`, and the thin CLI wrapper in `src/cli.py`
 (`python -m src.cli input.pdf output.png --rooms`).
 
-## De .exe zelf bouwen
+## Building the .exe yourself
 
 ```bash
 .venv\Scripts\pyinstaller packaging\floorplan_cleaner.spec --noconfirm
 ```
 
-Resultaat: `packaging\dist\FloorplanCleaner.exe`. Zie
-`.github\workflows\build-exe.yml` voor de geautomatiseerde build bij een
-GitHub-release.
+Result: `packaging\dist\FloorplanCleaner.exe`. See
+`.github\workflows\build-exe.yml` for the automated build on a
+GitHub release.
 
-## Belangrijk
+## Important
 
-- **Nooit echte klanttekeningen in deze repo committen** — ook al is de repo
-  privé. Testbestanden in `tests/fixtures/` zijn uitsluitend synthetisch
-  (zie `tests/fixtures/generate_fixtures.py`).
-- Alles offline: geen netwerkcalls tijdens het verwerken van een PDF.
+- **Never commit real customer drawings to this repo** — even though the repo
+  is private. Test files in `tests/fixtures/` are exclusively synthetic
+  (see `tests/fixtures/generate_fixtures.py`).
+- Everything offline: no network calls while processing a PDF.

@@ -55,7 +55,7 @@ def save_room_crops(
         y0, y1 = max(0, min(y0, H)), max(0, min(y1, H))
         if x1 - x0 < 1 or y1 - y0 < 1:
             logger.warning(
-                "Ruimte %s overgeslagen bij export: vak valt buiten de afbeelding.", room.id
+                "Skipped room %s during export: box falls outside the image.", room.id
             )
             continue
 
@@ -74,7 +74,7 @@ def save_room_crops(
                 filename = f"{base}.png"
         else:
             unnamed_counter += 1
-            filename = f"ruimte_{unnamed_counter:02d}.png"
+            filename = f"room_{unnamed_counter:02d}.png"
 
         crop = clean_img.crop((cx0, cy0, cx1, cy1))
         path = os.path.join(out_dir, filename)
@@ -101,20 +101,20 @@ def write_room_log(
     """
     rooms_by_id = {r.id: r for r in rooms}
     lines = []
-    lines.append(f"Ruimte-log voor: {pdf_path}")
-    lines.append(f"Methode: {'MODE A (CAD-lagen)' if mode_a else 'MODE B (beeldherkenning, best effort)'}")
-    lines.append(f"Aantal gedetecteerde ruimte-vlakken: {len(rooms)}")
+    lines.append(f"Room log for: {pdf_path}")
+    lines.append(f"Method: {'MODE A (CAD layers)' if mode_a else 'MODE B (image recognition, best effort)'}")
+    lines.append(f"Number of detected room areas: {len(rooms)}")
     lines.append("")
-    lines.append("=== Aangemaakte PNG's ===")
+    lines.append("=== PNGs created ===")
     ordered = sorted(rooms, key=lambda r: (r.bbox[1], r.bbox[0]))
     for room in ordered:
         fname = id_to_filename.get(room.id, "?")
-        name = room.name or "(geen naam herkend - volgnummer gebruikt)"
+        name = room.name or "(no name recognized - sequence number used)"
         lines.append(f"  - {fname}  <-  {name}")
 
     if anchor_log:
         lines.append("")
-        lines.append("=== Ruimtenamen uit de tekening ZONDER eigen PNG ===")
+        lines.append("=== Room names found in the drawing WITHOUT their own PNG ===")
         any_missing = False
         reported_codes = set()
         for entry in anchor_log:
@@ -129,34 +129,34 @@ def write_room_log(
             reported_codes.add(code)
             any_missing = True
             if room_id is None:
-                reason = "kon niet aan een gedetecteerd ruimte-vlak gekoppeld worden"
+                reason = "could not be linked to a detected room area"
             elif not entry.direct_hit:
-                guess_name = final_name or "(onbenoemd vlak)"
+                guess_name = final_name or "(unnamed area)"
                 reason = (
-                    f"geen eigen ruimte-vlak gedetecteerd op deze plek (waarschijnlijk "
-                    f"te klein gefilterd, of niet volledig omsloten door muren) - "
-                    f"dichtstbijzijnde herkende ruimte was '{guess_name}' "
-                    f"({id_to_filename.get(room_id, '?')}), maar dit is een gok, geen "
-                    f"bevestigde samenvoeging"
+                    f"no dedicated room area detected at this location (likely "
+                    f"filtered out as too small, or not fully enclosed by walls) - "
+                    f"the nearest recognized room was '{guess_name}' "
+                    f"({id_to_filename.get(room_id, '?')}), but this is a guess, not a "
+                    f"confirmed match"
                 )
             elif entry.suppressed:
                 reason = (
-                    "samengevoegd met andere ruimte(s) tot 1 groot vlak zonder "
-                    "duidelijke scheidingsmuur - geen automatische naam gebruikt "
-                    f"(zie {id_to_filename.get(room_id, '?')})"
+                    "merged with other room(s) into 1 large area with no clear "
+                    "dividing wall - no automatic name used "
+                    f"(see {id_to_filename.get(room_id, '?')})"
                 )
             elif final_room is None:
-                reason = "verwijderd of samengevoegd tijdens handmatige correctie"
+                reason = "deleted or merged during manual correction"
             elif final_name and final_name != name:
                 reason = (
-                    f"samengevoegd met ruimte '{final_name}' - beide vallen "
-                    f"binnen hetzelfde vlak ({id_to_filename.get(room_id, '?')})"
+                    f"merged with room '{final_name}' - both fall within the same "
+                    f"area ({id_to_filename.get(room_id, '?')})"
                 )
             else:
-                reason = "onbekende reden"
+                reason = "unknown reason"
             lines.append(f"  - {name} (code {code}): {reason}")
         if not any_missing:
-            lines.append("  (geen - alle herkende ruimtenamen kregen een eigen PNG)")
+            lines.append("  (none - every recognized room name got its own PNG)")
 
     lines.append("")
     with open(log_path, "w", encoding="utf-8") as f:

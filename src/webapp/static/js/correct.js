@@ -69,7 +69,7 @@
     });
 
     const label = new Konva.Text({
-      text: room.name || "(geen naam)",
+      text: room.name || "(no name)",
       fontSize: 14 / totalScale(),
       fill: "#1f2320",
       padding: 2,
@@ -134,7 +134,7 @@
     nodes.group.position({ x: r.x, y: r.y });
     nodes.rect.size({ width: r.width, height: r.height });
     nodes.label.width(r.width);
-    nodes.label.text(room.name || "(geen naam)");
+    nodes.label.text(room.name || "(no name)");
   }
 
   // ---- selectie ---------------------------------------------------------
@@ -310,7 +310,7 @@
     const y1 = Math.max(a.bbox[3], b.bbox[3]);
 
     const suggestedName = a.name || b.name || "";
-    const name = window.prompt("Naam voor de samengevoegde ruimte:", suggestedName);
+    const name = window.prompt("Name for the merged room:", suggestedName);
     if (name === null) return; // geannuleerd
 
     const merged = {
@@ -643,7 +643,7 @@
       const resp = await fetchPromise;
       if (!resp.ok) {
         const text = await resp.text();
-        throw new Error(text || `Serverfout (${resp.status})`);
+        throw new Error(text || `Server error (${resp.status})`);
       }
       const data = await resp.json();
       imageWidth = data.width;
@@ -668,7 +668,7 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rooms }),
       }),
-      "Roteren mislukt: "
+      "Rotate failed: "
     );
   }
 
@@ -679,7 +679,7 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rooms, degrees }),
       }),
-      "Roteren mislukt: "
+      "Rotate failed: "
     );
   }
 
@@ -705,7 +705,7 @@
         bgLayer.draw();
         resolve();
       };
-      imgObj.onerror = () => reject(new Error("Afbeelding laden mislukt."));
+      imgObj.onerror = () => reject(new Error("Failed to load the image."));
       imgObj.src = url;
     });
   }
@@ -748,9 +748,9 @@
     let resp;
     try {
       resp = await fetch(`/jobs/${jobId}/detect`);
-      if (!resp.ok) throw new Error(`Serverfout (${resp.status})`);
+      if (!resp.ok) throw new Error(`Server error (${resp.status})`);
     } catch (err) {
-      loadingEl.textContent = "Laden mislukt: " + err.message;
+      loadingEl.textContent = "Failed to load: " + err.message;
       return;
     }
     const data = await resp.json();
@@ -763,7 +763,7 @@
       await loadBackgroundImage(data.image_url);
     } catch (err) {
       loadingEl.hidden = false;
-      loadingEl.textContent = "Laden mislukt: " + err.message;
+      loadingEl.textContent = "Failed to load: " + err.message;
       return;
     }
     fitToContainer();
@@ -808,7 +808,7 @@
     document.getElementById("btn-export").addEventListener("click", doExport);
 
     document.getElementById("btn-back").addEventListener("click", (e) => {
-      if (hasUnsavedChanges && !window.confirm("Nog niet-geëxporteerde wijzigingen gaan dan verloren. Toch teruggaan naar de startpagina?")) {
+      if (hasUnsavedChanges && !window.confirm("Any changes you haven't exported yet will be lost. Go back to the start page anyway?")) {
         e.preventDefault();
       }
     });
@@ -816,7 +816,7 @@
 
   async function doExport() {
     clearStatus();
-    showStatus("Bezig met exporteren...");
+    showStatus("Exporting...");
     try {
       const resp = await fetch(`/jobs/${jobId}/export`, {
         method: "POST",
@@ -825,7 +825,7 @@
       });
       if (!resp.ok) {
         const text = await resp.text();
-        throw new Error(text || `Serverfout (${resp.status})`);
+        throw new Error(text || `Server error (${resp.status})`);
       }
       const data = await resp.json();
       clearStatus();
@@ -836,7 +836,7 @@
       resultEl.hidden = false;
       resultEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
     } catch (err) {
-      showStatus("Export mislukt: " + err.message, true);
+      showStatus("Export failed: " + err.message, true);
     }
   }
 

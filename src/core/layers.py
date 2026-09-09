@@ -65,8 +65,8 @@ def apply_explicit_layer_selection(
         keep = name in selected
         doc.set_layer_ui_config(name, action=0 if keep else 2)
         (kept if keep else dropped).append(name)
-    logger.info("Lagen AAN: %s", ", ".join(kept) if kept else "(geen)")
-    logger.info("Lagen UIT: %d lagen", len(dropped))
+    logger.info("Layers ON: %s", ", ".join(kept) if kept else "(none)")
+    logger.info("Layers OFF: %d layers", len(dropped))
     return kept, dropped
 
 
