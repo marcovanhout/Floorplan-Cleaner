@@ -8,7 +8,7 @@ from PIL import Image
 
 from .constants import DEFAULT_DROP_KEYWORDS, DEFAULT_KEEP_KEYWORDS
 from .export import save_room_crops, write_room_log
-from .layers import apply_layer_filter, has_usable_layers
+from .layers import apply_explicit_layer_selection, apply_layer_filter, has_usable_layers, list_layers
 from .names import extract_room_names_from_pdf, match_names_to_rooms, match_names_to_rooms_ocr
 from .raster import clean_via_raster
 from .render import force_black_lines, render_page
@@ -23,13 +23,26 @@ def run_clean(
     force_raster: bool = False,
     keep_keywords: list[str] | None = None,
     drop_keywords: list[str] | None = None,
+    selected_layers: list[str] | None = None,
 ) -> CleanResult:
+    """selected_layers: expliciete lijst laagnamen (bv. rechtstreeks uit de
+    laag-kiezer in de webapp) - heeft voorrang op keep_keywords/drop_keywords
+    en dwingt MODE A af zolang de PDF uberhaupt lagen heeft (geen keywoord-
+    gok meer nodig of dit een 'bruikbare' laag-PDF is: de gebruiker heeft dat
+    zelf al aangegeven door lagen aan te vinken). CLI-gebruik (geen laag-
+    kiezer beschikbaar) laat dit op None en valt terug op de keywoorden."""
     keep_keywords = keep_keywords if keep_keywords is not None else DEFAULT_KEEP_KEYWORDS
     drop_keywords = drop_keywords if drop_keywords is not None else DEFAULT_DROP_KEYWORDS
 
-    mode_a = not force_raster and has_usable_layers(doc, keep_keywords)
+    has_layers = bool(list_layers(doc))
+    mode_a = not force_raster and has_layers and (
+        selected_layers is not None or has_usable_layers(doc, keep_keywords)
+    )
     if mode_a:
-        kept, dropped = apply_layer_filter(doc, keep_keywords, drop_keywords)
+        if selected_layers is not None:
+            kept, dropped = apply_explicit_layer_selection(doc, selected_layers)
+        else:
+            kept, dropped = apply_layer_filter(doc, keep_keywords, drop_keywords)
         img = force_black_lines(render_page(page, scale, alpha=True))
         return CleanResult(image=img, mode_a=True, kept_layers=kept, dropped_layers=dropped)
 

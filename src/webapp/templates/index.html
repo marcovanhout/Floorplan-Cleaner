@@ -41,25 +41,23 @@
     gewoon bruikbaar om ruimtes handmatig te benoemen.
   </p>
 
-  <details class="advanced">
-    <summary>Geavanceerd: laag-keywoorden</summary>
-    <p class="hint">
-      Laat dit gewoon op de standaardwaarde staan — dit zijn geen gegevens uit jouw
-      tekening, maar technische zoektermen waarmee het programma bepaalt welke
-      CAD-lagen (muren/deuren/ramen) het moet behouden. Alleen aanpassen als de
-      automatische herkenning niets oplevert bij een ongebruikelijke CAD-export.
-    </p>
-    <div class="field">
-      <label for="keep_keywords">Te behouden lagen (keywoorden)</label>
-      <input type="text" id="keep_keywords" name="keep_keywords" value="{{ default_keep_keywords }}">
-    </div>
-    <div class="field">
-      <label for="drop_keywords">Altijd uit te zetten lagen (keywoorden)</label>
-      <input type="text" id="drop_keywords" name="drop_keywords" value="{{ default_drop_keywords }}">
-    </div>
-  </details>
+  <p id="layers-loading" class="status" hidden>Bestand wordt ingelezen...</p>
 
-  <button type="submit" id="upload-submit">Verwerken</button>
+  <div id="layers-section" class="field" hidden>
+    <label>Lagen</label>
+    <p class="hint">
+      Dit zijn de CAD-lagen uit jouw PDF. We hebben er alvast een paar aangevinkt op basis
+      van de laagnaam (muren/deuren/ramen e.d.) — controleer of dat klopt en vink zelf aan
+      wat we gemist hebben. Elke tekenaar noemt lagen anders, dus zie dit als een voorstel,
+      geen garantie.
+    </p>
+    <p class="layers-toggle-all">
+      <a href="#" id="layers-select-all">Alles aan</a> · <a href="#" id="layers-select-none">Alles uit</a>
+    </p>
+    <div id="layers-list" class="layers-list"></div>
+  </div>
+
+  <button type="submit" id="upload-submit" disabled>Verwerken</button>
   <p id="upload-status" class="status" hidden></p>
 </form>
 {% endblock %}
