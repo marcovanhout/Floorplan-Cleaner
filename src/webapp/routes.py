@@ -8,6 +8,7 @@ import fitz
 from flask import Blueprint, abort, jsonify, render_template, request, send_file
 
 from src.core.constants import DEFAULT_DROP_KEYWORDS, DEFAULT_KEEP_KEYWORDS
+from src.core.layers import list_layers, recommend_layers
 from src.core.pipeline import export_rooms, rotate_clockwise, run_clean, run_room_detection
 from src.core.raster import is_tesseract_available
 from src.core.render import image_to_png_bytes
@@ -53,38 +54,58 @@ def _unmatched_name_warnings(job) -> list[str]:
 def index():
     return render_template(
         "index.html",
-        default_keep_keywords=",".join(DEFAULT_KEEP_KEYWORDS),
-        default_drop_keywords=",".join(DEFAULT_DROP_KEYWORDS),
         tesseract_available=is_tesseract_available(),
     )
 
 
 @bp.route("/upload", methods=["POST"])
 def upload():
+    """Stap 1: bestand ontvangen en CAD-lagen inventariseren (als die er zijn),
+    zodat de gebruiker in de laag-kiezer kan zien/aanpassen wat er meegenomen
+    wordt VOORDAT de daadwerkelijke verwerking (/jobs/<id>/process) start.
+    Elke tekenaar noemt lagen anders - een keywoord-gok is hooguit een
+    startpunt (zie recommended), nooit de enige waarheid."""
     file = request.files.get("pdf")
     if not file or not file.filename:
         abort(400, "Geen PDF geselecteerd.")
 
     job = create_job(file.read(), file.filename)
+    doc = fitz.open(job.pdf_path)
+
+    layers = list_layers(doc)
+    recommended = recommend_layers(doc, DEFAULT_KEEP_KEYWORDS, DEFAULT_DROP_KEYWORDS)
+
+    return jsonify({
+        "job_id": job.job_id,
+        "layers": [layer["name"] for layer in layers],
+        "recommended_layers": sorted(recommended),
+    })
+
+
+@bp.route("/jobs/<job_id>/process", methods=["POST"])
+def process(job_id):
+    """Stap 2: daadwerkelijk opschonen + ruimtes detecteren, met de laagkeuze
+    (indien van toepassing) uit de laag-kiezer op de uploadpagina."""
+    job = get_job(job_id)
+    if job is None:
+        abort(404, "Onbekende of verlopen job.")
 
     page_no = int(request.form.get("page", 0) or 0)
     scale = float(request.form.get("scale", 4.0) or 4.0)
     force_raster = request.form.get("force_raster") == "on"
-    keep_keywords = [
-        k for k in (request.form.get("keep_keywords") or "").split(",") if k
-    ] or DEFAULT_KEEP_KEYWORDS
-    drop_keywords = [
-        k for k in (request.form.get("drop_keywords") or "").split(",") if k
-    ] or DEFAULT_DROP_KEYWORDS
 
     doc = fitz.open(job.pdf_path)
     if page_no < 0 or page_no >= doc.page_count:
         abort(400, f"Ongeldig paginanummer: {page_no} (document heeft {doc.page_count} pagina's).")
     page = doc[page_no]
 
+    # Alleen als 'meesturen wat je hebt aangevinkt' zin heeft: had deze PDF
+    # uberhaupt lagen? Zo niet (bv. een platte/gescande PDF), dan is er nooit
+    # een laag-kiezer getoond en valt run_clean vanzelf terug op MODE B.
+    selected_layers = request.form.getlist("layers") if list_layers(doc) else None
+
     clean_result = run_clean(
-        doc, page, scale=scale, force_raster=force_raster,
-        keep_keywords=keep_keywords, drop_keywords=drop_keywords,
+        doc, page, scale=scale, force_raster=force_raster, selected_layers=selected_layers,
     )
     detection = run_room_detection(page, scale, clean_result)
 
