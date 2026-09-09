@@ -631,16 +631,16 @@
 
   // ---- roteren -----------------------------------------------------------
 
-  async function rotateClockwise() {
+  // Gedeeld door de exacte 90-graden-knop en de vrije-hoek-invoer: beide
+  // roepen server-side een rotate-endpoint aan met de huidige rooms, en
+  // verwerken het antwoord (nieuwe afbeelding + omgerekende vakken) op
+  // dezelfde manier.
+  async function applyRotateResponse(fetchPromise, errorPrefix) {
     clearStatus();
     transformer.nodes([]); // loskoppelen: rooms/afbeelding worden zo vervangen
     selectedIds = [];
     try {
-      const resp = await fetch(`/jobs/${jobId}/rotate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rooms }),
-      });
+      const resp = await fetchPromise;
       if (!resp.ok) {
         const text = await resp.text();
         throw new Error(text || `Serverfout (${resp.status})`);
@@ -657,8 +657,30 @@
       redrawAll();
       hasUnsavedChanges = true;
     } catch (err) {
-      showStatus("Roteren mislukt: " + err.message, true);
+      showStatus(errorPrefix + err.message, true);
     }
+  }
+
+  function rotateClockwise() {
+    return applyRotateResponse(
+      fetch(`/jobs/${jobId}/rotate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rooms }),
+      }),
+      "Roteren mislukt: "
+    );
+  }
+
+  function rotateByAngle(degrees) {
+    return applyRotateResponse(
+      fetch(`/jobs/${jobId}/rotate-angle`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rooms, degrees }),
+      }),
+      "Roteren mislukt: "
+    );
   }
 
   // Laadt (of vervangt) de achtergrondafbeelding. Gebruikt zowel bij het
@@ -764,6 +786,11 @@
       roomLayer.draw();
     });
     document.getElementById("btn-rotate").addEventListener("click", rotateClockwise);
+    document.getElementById("btn-rotate-angle").addEventListener("click", () => {
+      const degrees = parseFloat(document.getElementById("rotate-angle-input").value);
+      if (!Number.isFinite(degrees) || degrees === 0) return;
+      rotateByAngle(degrees);
+    });
     document.addEventListener("keydown", (e) => {
       if ((e.key === "Delete" || e.key === "Backspace") && selectedIds.length && document.activeElement.tagName !== "INPUT") {
         e.preventDefault();

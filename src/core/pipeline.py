@@ -4,6 +4,8 @@ CLI (src/cli.py) en webapp (src/webapp/routes.py) roepen beide deze functies
 aan; hier zit geen argparse- of Flask-specifieke code.
 """
 
+import math
+
 from PIL import Image
 
 from .constants import DEFAULT_DROP_KEYWORDS, DEFAULT_KEEP_KEYWORDS
@@ -117,6 +119,64 @@ def rotate_clockwise(
         )
         for r in rooms
     ]
+    return rotated_image, rotated_rooms
+
+
+def rotate_by_angle(
+    image: Image.Image, rooms: list[RoomRecord], degrees: float
+) -> tuple[Image.Image, list[RoomRecord]]:
+    """Roteert de opgeschoonde plattegrond met een WILLEKEURIGE hoek (met de
+    klok mee), voor de "vrije hoek"-optie naast de 90-graden-knop
+    (rotate_clockwise hierboven, die exact/lossless blijft voor de gangbare
+    90-graden-stappen).
+
+    Ruimte-vakken blijven overal in de app eenvoudige RECHTE rechthoeken
+    (correctiescherm, export-uitsnede) - bij een hoek die niet in de buurt
+    van 0/90/180/270 graden ligt, wordt de rechte omtrek om een dan
+    schuinstaande ruimte daardoor noodzakelijkerwijs RUIMER dan de ruimte
+    zelf (de rechte bounding box van de 4 gedraaide hoekpunten). Bewuste
+    keuze, akkoord bevonden: bij een kleine rechtzet-correctie (het meest
+    voorkomende gebruik) is dit verwaarloosbaar; alleen bij een grote
+    afwijking van een rechte hoek wordt de uitsnede merkbaar ruimer.
+
+    Formule geverifieerd met een testrechthoek tegen PIL's
+    Image.rotate(-degrees, expand=True) (PIL roteert tegen de klok in bij
+    een positieve hoek, dus -degrees voor met de klok mee, consistent met
+    de bestaande 90-knop): een punt (x,y) -> roteer rond het midden van de
+    ORIGINELE afbeelding met -degrees, verschuif naar het midden van de
+    NIEUWE (groter geworden) afbeelding.
+    """
+    orig_w, orig_h = image.size
+    rotated_image = image.rotate(
+        -degrees, expand=True, resample=Image.BICUBIC, fillcolor=(0, 0, 0, 0)
+    )
+    new_w, new_h = rotated_image.size
+
+    theta = math.radians(degrees)
+    cos_t, sin_t = math.cos(theta), math.sin(theta)
+    cx, cy = orig_w / 2, orig_h / 2
+    ncx, ncy = new_w / 2, new_h / 2
+
+    def transform_point(x: float, y: float) -> tuple[float, float]:
+        dx, dy = x - cx, y - cy
+        nx = dx * cos_t - dy * sin_t
+        ny = dx * sin_t + dy * cos_t
+        return nx + ncx, ny + ncy
+
+    rotated_rooms = []
+    for r in rooms:
+        x0, y0, x1, y1 = r.bbox
+        corners = [transform_point(x, y) for x, y in [(x0, y0), (x1, y0), (x0, y1), (x1, y1)]]
+        xs = [c[0] for c in corners]
+        ys = [c[1] for c in corners]
+        rotated_rooms.append(
+            RoomRecord(
+                id=r.id,
+                bbox=(round(min(xs)), round(min(ys)), round(max(xs)), round(max(ys))),
+                name=r.name,
+                source=r.source,
+            )
+        )
     return rotated_image, rotated_rooms
 
 

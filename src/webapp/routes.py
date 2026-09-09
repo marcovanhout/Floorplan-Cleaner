@@ -1,6 +1,7 @@
 """Flask-routes: upload -> detecteren -> corrigeren (canvas) -> exporteren."""
 
 import io
+import math
 import os
 import shutil
 
@@ -9,7 +10,7 @@ from flask import Blueprint, abort, jsonify, render_template, request, send_file
 
 from src.core.constants import DEFAULT_DROP_KEYWORDS, DEFAULT_KEEP_KEYWORDS
 from src.core.layers import apply_explicit_layer_selection, list_layers, recommend_layers
-from src.core.pipeline import export_rooms, rotate_clockwise, run_clean, run_room_detection
+from src.core.pipeline import export_rooms, rotate_by_angle, rotate_clockwise, run_clean, run_room_detection
 from src.core.raster import is_tesseract_available
 from src.core.render import force_black_lines, image_to_png_bytes, render_page
 from src.core.types import RoomRecord
@@ -182,6 +183,36 @@ def rotate(job_id):
     rooms = [_room_from_dict(r) for r in rooms_payload]
 
     job.clean_image, job.rooms = rotate_clockwise(job.clean_image, rooms)
+
+    return jsonify({
+        "width": job.clean_image.width,
+        "height": job.clean_image.height,
+        "rooms": [_room_to_dict(r) for r in job.rooms],
+    })
+
+
+@bp.route("/jobs/<job_id>/rotate-angle", methods=["POST"])
+def rotate_angle(job_id):
+    """Vrije-hoek-rotatie naast de exacte 90-graden-knop hierboven - zie
+    rotate_by_angle() voor de (bewust geaccepteerde) precisie-afweging bij
+    een hoek ver van een rechte hoek."""
+    job = get_job(job_id)
+    if job is None or job.clean_image is None:
+        abort(404, "Onbekende of verlopen job.")
+
+    body = request.get_json(force=True, silent=True) or {}
+    rooms_payload = body.get("rooms")
+    if not isinstance(rooms_payload, list):
+        abort(400, "Verwacht een lijst 'rooms' in de request-body.")
+    try:
+        degrees = float(body.get("degrees"))
+    except (TypeError, ValueError):
+        abort(400, "Verwacht een numerieke 'degrees' in de request-body.")
+    if not math.isfinite(degrees):
+        abort(400, "Ongeldige hoek.")
+    rooms = [_room_from_dict(r) for r in rooms_payload]
+
+    job.clean_image, job.rooms = rotate_by_angle(job.clean_image, rooms, degrees)
 
     return jsonify({
         "width": job.clean_image.width,
