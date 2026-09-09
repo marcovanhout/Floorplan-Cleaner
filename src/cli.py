@@ -30,8 +30,8 @@ def main():
     ap.add_argument("input_pdf")
     ap.add_argument("output_png")
     ap.add_argument("--scale", type=float, default=4.0, help="render resolution factor (default 4x)")
-    ap.add_argument("--force-raster", action="store_true", help="skip layer detection, always use MODE B")
-    ap.add_argument("--no-ocr", action="store_true", help="do not perform OCR text removal in MODE B")
+    ap.add_argument("--force-raster", action="store_true", help="skip layer detection, always use image-based cleaning")
+    ap.add_argument("--no-ocr", action="store_true", help="do not perform OCR text removal in image-based cleaning")
     ap.add_argument("--list-layers", action="store_true", help="show found CAD layers and stop")
     ap.add_argument("--rooms", action="store_true", help="also generate separate PNGs per room")
     ap.add_argument(
@@ -81,9 +81,9 @@ def main():
         remove_text=not args.no_ocr,
     )
     if clean_result.mode_a:
-        print("-> Usable CAD layers found: MODE A (layer filtering).")
+        print("-> Usable CAD layers found: cleaning via CAD layers.")
     else:
-        print("-> No usable CAD layers: MODE B (color + OCR fallback).")
+        print("-> No usable CAD layers: falling back to image recognition (color + OCR).")
 
     clean_result.image.save(args.output_png)
     print(f"Saved: {args.output_png} ({clean_result.image.width}x{clean_result.image.height}px)")

@@ -36,14 +36,14 @@
           name="force_raster"
           data-tesseract-available="{{ 'true' if tesseract_available else 'false' }}"
         >
-        Force image recognition (MODE B), even if CAD layers are present
+        Force image-based cleaning, even if usable CAD layers are found
       </label>
     </div>
 
     <p id="tesseract-warning" class="hint hint-warning" hidden>
-      Tesseract-OCR was not found on this system. MODE B will then work without
-      automatic text removal/name recognition - the correction step on the next
-      page is still usable to name rooms manually.
+      Tesseract-OCR was not found on this system. Image-based cleaning will then
+      work without automatic text removal/name recognition - the correction step
+      on the next page is still usable to name rooms manually.
     </p>
 
     {% if tesseract_available %}
