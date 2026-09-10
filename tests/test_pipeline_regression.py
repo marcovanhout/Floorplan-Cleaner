@@ -45,7 +45,22 @@ def test_ported_pipeline_matches_v1_prototype_image_and_rooms():
     v1_img, v1_boxes, v1_names = _run_v1(SIMPLE_FLOORPLAN_PDF, SCALE)
     v2_img, v2_rooms = _run_v2(SIMPLE_FLOORPLAN_PDF, SCALE)
 
-    assert np.array_equal(np.array(v1_img), np.array(v2_img)), "opgeschoonde afbeelding wijkt af"
+    # Sinds force_black_lines() zichtbare pixels hard zwart/transparant maakt
+    # i.p.v. v1's geleidelijke alphawaarde op basis van helderheid (bewuste
+    # fix: dunne/anti-aliased lijnen waren in de geëxporteerde PNG nauwelijks
+    # zichtbaar, zie render.py) is geen pixel-exacte gelijkheid meer te
+    # verwachten. Wel: de RGB-kanalen (altijd zwart) moeten gelijk blijven,
+    # v2's alfakanaal moet overal hard 0 of 255 zijn, en het zichtbare-
+    # pixels-gebied moet nagenoeg (op een smalle anti-aliased randzone na)
+    # overeenkomen met v1.
+    v1_arr = np.array(v1_img)
+    v2_arr = np.array(v2_img)
+    assert np.array_equal(v2_arr[..., :3], v1_arr[..., :3]), "RGB-kanalen wijken af"
+    assert set(np.unique(v2_arr[..., 3]).tolist()) <= {0, 255}, "alfakanaal is niet hard zwart/transparant"
+    v1_visible = v1_arr[..., 3] > 0
+    v2_visible = v2_arr[..., 3] > 0
+    mismatch_frac = (v1_visible != v2_visible).sum() / v1_visible.size
+    assert mismatch_frac < 0.001, f"zichtbare pixels wijken te veel af ({mismatch_frac:.4%})"
     assert len(v1_boxes) == len(v2_rooms) == 1
 
     v1_room_names = sorted(n for n in v1_names.values() if n)
