@@ -19,10 +19,10 @@
   // Waarschuwt bij "Terug" als er nog niet-geëxporteerde wijzigingen zijn
   // (correcties leven alleen client-side totdat er geëxporteerd wordt).
   let hasUnsavedChanges = false;
-  // Volgorde van selectie. Klikken/shift-klikken houdt dit op max 2 (voor
-  // samenvoegen); marquee-selectie (zie setupMarqueeSelect) kan er meer in
-  // zetten - "Samenvoegen" blijft dan uit (zie updateToolbarState), maar
-  // "Verwijderen" werkt gewoon voor elk aantal.
+  // Volgorde van selectie - onbeperkt aantal, zowel via los shift-klikken
+  // als via een marquee-selectiekader (zie setupMarqueeSelect). "Samenvoegen"
+  // en "Verwijderen" werken allebei voor elk aantal (2 of meer resp. 1 of
+  // meer, zie updateToolbarState).
   let selectedIds = [];
 
   let stage, bgLayer, roomLayer, transformer;
@@ -225,10 +225,8 @@
     if (additive) {
       if (selectedIds.includes(id)) {
         selectedIds = selectedIds.filter((x) => x !== id);
-      } else if (selectedIds.length < 2) {
-        selectedIds.push(id);
       } else {
-        selectedIds = [selectedIds[1], id];
+        selectedIds.push(id);
       }
     } else {
       selectedIds = [id];
@@ -275,7 +273,7 @@
 
   function updateToolbarState() {
     document.getElementById("btn-delete").disabled = selectedIds.length === 0;
-    document.getElementById("btn-merge").disabled = selectedIds.length !== 2;
+    document.getElementById("btn-merge").disabled = selectedIds.length < 2;
   }
 
   // ---- drag/resize -> state terugschrijven -------------------------------
@@ -372,17 +370,22 @@
     hasUnsavedChanges = true;
   }
 
+  // Samenvoegen van 2 of meer vakken (bv. een kamer + de deurvakjes die er
+  // per ongeluk los van gedetecteerd zijn) tot één omvattende rechthoek -
+  // handig omdat losse vakjes anders één voor één met "Verwijderen"
+  // opgeruimd zouden moeten worden terwijl ze eigenlijk gewoon bij de kamer
+  // horen.
   function mergeSelected() {
-    if (selectedIds.length !== 2) return;
-    const [a, b] = selectedIds.map((id) => rooms.find((r) => r.id === id));
-    if (!a || !b) return;
+    if (selectedIds.length < 2) return;
+    const selected = selectedIds.map((id) => rooms.find((r) => r.id === id)).filter(Boolean);
+    if (selected.length < 2) return;
 
-    const x0 = Math.min(a.bbox[0], b.bbox[0]);
-    const y0 = Math.min(a.bbox[1], b.bbox[1]);
-    const x1 = Math.max(a.bbox[2], b.bbox[2]);
-    const y1 = Math.max(a.bbox[3], b.bbox[3]);
+    const x0 = Math.min(...selected.map((r) => r.bbox[0]));
+    const y0 = Math.min(...selected.map((r) => r.bbox[1]));
+    const x1 = Math.max(...selected.map((r) => r.bbox[2]));
+    const y1 = Math.max(...selected.map((r) => r.bbox[3]));
 
-    const suggestedName = a.name || b.name || "";
+    const suggestedName = selected.find((r) => r.name)?.name || "";
     const name = window.prompt("Name for the merged room:", suggestedName);
     if (name === null) return; // geannuleerd
     captureUndoSnapshot(false);
@@ -395,8 +398,9 @@
     };
 
     transformer.nodes([]); // eerst loskoppelen, anders crasht Konva bij destroy() van een vastgehouden node
-    rooms = rooms.filter((r) => r.id !== a.id && r.id !== b.id);
-    [a, b].forEach((r) => {
+    const mergedIds = new Set(selected.map((r) => r.id));
+    rooms = rooms.filter((r) => !mergedIds.has(r.id));
+    selected.forEach((r) => {
       const nodes = nodesById.get(r.id);
       if (nodes) nodes.group.destroy();
       nodesById.delete(r.id);

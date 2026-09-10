@@ -7,7 +7,7 @@
     <button id="tool-select" class="tool-btn active" data-tool="select" title="Select/drag/resize">Select</button>
     <button id="tool-draw" class="tool-btn" data-tool="draw" title="Draw a new box">+ Draw box</button>
     <button id="tool-erase" class="tool-btn" data-tool="erase" title="Draw a rectangle to erase it (make transparent)">⌫ Erase</button>
-    <button id="btn-merge" disabled title="Select 2 boxes to merge">Merge</button>
+    <button id="btn-merge" disabled title="Select 2 or more boxes to merge">Merge</button>
     <button id="btn-delete" disabled title="Select a box to delete">Delete</button>
     <button id="btn-undo" disabled title="Undo the last change">↶ Undo</button>
     <span class="spacer"></span>
@@ -30,12 +30,14 @@
   </div>
 
   <p class="hint">
-    Click a box to select it (drag/resize), shift-click a second box to merge
-    them, double-click a name to rename it. "+ Draw box" and then drag to draw
-    a missed box yourself. Drag on the empty background to pan the drawing, or
-    hold Shift while dragging to draw a selection box and select multiple
-    boxes at once (handy for deleting them all together). Scroll with the
-    mouse wheel to zoom in/out at the cursor position. "Rotate" turns 90
+    Click a box to select it (drag/resize), shift-click more boxes to add them
+    to the selection, double-click a name to rename it. "+ Draw box" and then
+    drag to draw a missed box yourself. Drag on the empty background to pan
+    the drawing, or hold Shift while dragging to draw a selection box and
+    select multiple boxes at once. With 2 or more boxes selected, "Merge"
+    combines them into one box (e.g. a room plus a door opening that got
+    detected separately), or "Delete" removes them all together. Scroll with
+    the mouse wheel to zoom in/out at the cursor position. "Rotate" turns 90
     degrees per click; the input field next to it rotates by a custom angle
     (for example to straighten a skewed scan) - note: at a large deviation
     from a right angle, the straight room boxes will then be somewhat looser

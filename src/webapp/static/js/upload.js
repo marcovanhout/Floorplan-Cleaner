@@ -233,13 +233,29 @@
 
   pdfInput.addEventListener("change", inspectSelectedFile);
 
+  // Verwerking van een groot/gescand bestand kan meer dan een minuut duren
+  // (beeldherkenning + OCR op tientallen miljoenen pixels) - zonder teken
+  // van leven lijkt de pagina dan vastgelopen. Een oplopende tijdsduur bij
+  // de statustekst laat zien dat de tool nog bezig is, en geeft een indruk
+  // hoe lang het ongeveer duurt.
+  function formatElapsed(seconds) {
+    if (seconds < 60) return `${seconds}s`;
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}m ${String(s).padStart(2, "0")}s`;
+  }
+
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     if (!currentJobId) return;
     submitBtn.disabled = true;
     status.hidden = false;
     status.classList.remove("error");
-    status.textContent = "Processing...";
+    const startTime = Date.now();
+    status.textContent = "Processing... (0s)";
+    const timer = setInterval(() => {
+      status.textContent = `Processing... (${formatElapsed(Math.round((Date.now() - startTime) / 1000))})`;
+    }, 1000);
 
     try {
       // Het bestand zelf is al bij /upload verstuurd - hier alleen de
@@ -264,8 +280,10 @@
         throw new Error(text || `Server error (${resp.status})`);
       }
       const data = await resp.json();
+      clearInterval(timer);
       window.location.href = data.redirect;
     } catch (err) {
+      clearInterval(timer);
       status.classList.add("error");
       status.textContent = "Failed: " + err.message;
       submitBtn.disabled = false;
