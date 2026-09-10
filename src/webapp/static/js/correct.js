@@ -19,7 +19,7 @@
   // Waarschuwt bij "Terug" als er nog niet-geëxporteerde wijzigingen zijn
   // (correcties leven alleen client-side totdat er geëxporteerd wordt).
   let hasUnsavedChanges = false;
-  // Volgorde van selectie - onbeperkt aantal, zowel via los shift-klikken
+  // Volgorde van selectie - onbeperkt aantal, zowel via los ctrl-klikken
   // als via een marquee-selectiekader (zie setupMarqueeSelect). "Samenvoegen"
   // en "Verwijderen" werken allebei voor elk aantal (2 of meer resp. 1 of
   // meer, zie updateToolbarState).
@@ -169,7 +169,7 @@
     group.on("click tap", (e) => {
       if (tool !== "select") return;
       e.cancelBubble = true;
-      selectRoom(room.id, e.evt && e.evt.shiftKey);
+      selectRoom(room.id, e.evt && e.evt.ctrlKey);
     });
     group.on("dblclick dbltap", (e) => {
       e.cancelBubble = true;
@@ -612,7 +612,7 @@
   function setupPanning() {
     stage.on("mousedown touchstart", (e) => {
       if (tool !== "select") return;
-      if (e.evt && e.evt.shiftKey) return; // Shift+slepen is marquee-selectie, zie setupMarqueeSelect()
+      if (e.evt && e.evt.ctrlKey) return; // Ctrl+slepen is marquee-selectie, zie setupMarqueeSelect()
       if (e.target !== stage && !e.target.hasName("bg-image")) return;
       panStart = { pointer: stage.getPointerPosition(), stagePos: stage.position() };
       didPan = false;
@@ -646,21 +646,23 @@
     });
   }
 
-  // ---- marquee-selectie (Shift + slepen over meerdere vakken) -----------
+  // ---- marquee-selectie (Ctrl + slepen over meerdere vakken) ------------
   //
   // Bij een detectie met veel foutieve losse mini-vakjes (typisch bij een
   // platte/OCR-gebaseerde plattegrond) is 1-voor-1 aanklikken omslachtig -
-  // Shift+slepen tekent een selectiekader en selecteert in één keer alle
+  // Ctrl+slepen tekent een selectiekader en selecteert in één keer alle
   // vakken die het raakt, waarna "Verwijderen" (of de Delete-toets) ze
-  // allemaal ineens weghaalt. Gewone (niet-Shift) sleep blijft pannen, zie
-  // setupPanning() hierboven.
+  // allemaal ineens weghaalt. Gewone (niet-Ctrl) sleep blijft pannen, zie
+  // setupPanning() hierboven. Ctrl i.p.v. Shift gekozen (zowel hier als bij
+  // los aanklikken, zie selectRoom) omdat dat aansluit bij de Windows-
+  // conventie voor multi-select (Verkenner e.d.).
 
   let marqueeStart = null;
   let marqueeRect = null;
 
   function setupMarqueeSelect() {
     stage.on("mousedown touchstart", (e) => {
-      if (tool !== "select" || !(e.evt && e.evt.shiftKey)) return;
+      if (tool !== "select" || !(e.evt && e.evt.ctrlKey)) return;
       if (e.target !== stage && !e.target.hasName("bg-image")) return;
       marqueeStart = stagePointerToImagePoint();
       marqueeRect = new Konva.Rect({
