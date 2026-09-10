@@ -165,7 +165,7 @@ Paint.
 
 **Inmiddels gebouwd** (breder dan hier oorspronkelijk gepland): naast
 slepen/vergroten/verkleinen/samenvoegen/intekenen/verwijderen van losse
-vakken kan de gebruiker nu ook met Shift ingedrukt een selectievak over
+vakken kan de gebruiker nu ook met Ctrl ingedrukt een selectievak over
 meerdere vakken tegelijk slepen om ze in één keer te verwijderen
 ("spookvakjes" bij een rommelige detectie zijn zo snel op te ruimen). De
 plattegrond kan zowel per 90 graden als op een volledig vrije hoek
@@ -234,6 +234,20 @@ weegt zwaarder dan wat extra, goed zichtbare (en dus makkelijk handmatig
 te verwijderen) ruis bij dit randgeval. Voor dit bestandstype is vooral de
 opgeschoonde totaalplaat (die exporteert de tool sowieso altijd mee)
 bruikbaar, niet de automatische opsplitsing in losse kamers.
+
+**Nog drie correctiestap-verbeteringen:** "Samenvoegen" werkte tot nu toe
+alleen voor precies 2 vakken tegelijk; dat werkt nu voor 2 of meer. Direct
+bruikbaar voor de bekende beperking hierboven: een deur die per ongeluk
+als eigen "ruimte" gedetecteerd wordt, kun je nu in één keer samen met de
+bijbehorende kamer (en eventuele andere losse deurvakjes) selecteren en
+samenvoegen, zonder automatisch te hoeven raden welke vlakken "eigenlijk"
+bij elkaar horen. Losse vakjes aanklikken/selecteren voor multi-select
+gebeurt nu met Ctrl ingedrukt i.p.v. Shift (zowel bij los aanklikken als
+bij het selectiekader slepen) - sluit aan bij de Windows-conventie
+(Verkenner e.d.) waar de gebruiker al aan gewend is. Tot slot toont de
+statustekst tijdens het verwerken nu een oplopende tijdsduur ("Processing...
+(Ns)") - bij een groot/gescand bestand kan dat meer dan een minuut duren,
+en zonder teken van leven leek de pagina dan vastgelopen.
 
 ### 3.4 Nice-to-haves / later
 - Verbeterde automatische detectie (zie route's in sectie 4) — kan
