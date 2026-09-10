@@ -96,12 +96,67 @@ def _saturation(rgb: np.ndarray) -> np.ndarray:
     return sat
 
 
+def _local_median_color(rgb: np.ndarray, local_window: int, downsample: int) -> np.ndarray:
+    """Schat de "echte" vlakkleur ter plekke van elke pixel: de mediaankleur
+    (per kanaal apart) in een klein venster eromheen - ongevoelig voor een
+    dunne lijn erdoorheen, die binnen zo'n venster altijd in de minderheid
+    is. Zie _colored_mask voor waarom dit nodig is en waarom uitgedund wordt
+    vóór het filter (snelheid op een groot blad)."""
+    small = rgb[::downsample, ::downsample, :]
+    median_small = np.stack(
+        [ndimage.median_filter(small[..., c], size=local_window) for c in range(3)], axis=-1
+    )
+    median = np.repeat(np.repeat(median_small, downsample, axis=0), downsample, axis=1)
+    return median[: rgb.shape[0], : rgb.shape[1], :]
+
+
+def _hue_matches(rgb: np.ndarray, reference_rgb: np.ndarray, neutral_floor: float = 0.02) -> np.ndarray:
+    """Heeft een pixel dezelfde kleurzweem als een referentiekleur (de lokale
+    vlakkleur, zie _local_median_color), ongeacht hoe donker/licht hij is?
+
+    Vergelijkt de kleur-RICHTING (elk kanaal min het grijzeanteel, dus zonder
+    helderheid) via cosinus-gelijkenis - alleen de tint telt, niet hoe donker
+    de pixel is. Alleen een pixel ZONDER noemenswaardige eigen kleur (bijna
+    grijs/zwart) telt altijd als "passend", ongeacht de referentie - zo'n
+    pixel introduceert nooit een eigen, vreemde kleur (dit is ook het meest
+    voorkomende geval: een gewone zwarte lijn op een wit vlak). `neutral_floor`
+    is een ABSOLUTE (geen genormaliseerde/verhouding-)drempel, gecalibreerd
+    op een echt testbestand: normale anti-aliasing-ruis van een zwarte lijn
+    bleek daar zo goed als 0 (99e percentiel exact 0.0), terwijl een echt
+    gekleurde maar heel donkere pixel (bv. een blauwe arceringslijn die in
+    zijn kern bijna zwart rendert) een duidelijk meetbare 0.04 gaf - een
+    verhouding-gebaseerde maat zoals _saturation() zou hier juist NIET werken
+    (die is zelf instabiel/onbetrouwbaar vlak bij zwart, zie de toelichting
+    bij _colored_mask verderop).
+
+    Belangrijk: dit is NIET symmetrisch. Een kleurloze REFERENTIE (bv. een
+    wit vlak) maakt een gekleurde pixel niet automatisch "passend" - dat was
+    een eerdere fout hierin: een arceringslijn met een eigen kleur op een wit
+    vlak "botste" dan technisch nergens mee (wit heeft immers geen kleur om
+    tegen te botsen) en bleef daardoor ten onrechte beschermd. Heeft de pixel
+    zelf wel kleur maar de referentie niet, dan wijst de cosinus-gelijkenis
+    hieronder dat vanzelf af (het scalair product wordt 0)."""
+    px_chroma = rgb - rgb.min(axis=2, keepdims=True)
+    ref_chroma = reference_rgb - reference_rgb.min(axis=2, keepdims=True)
+    px_norm = np.linalg.norm(px_chroma, axis=2)
+    ref_norm = np.linalg.norm(ref_chroma, axis=2)
+
+    pixel_is_neutral = px_norm < neutral_floor
+
+    dot = (px_chroma * ref_chroma).sum(axis=2)
+    denom = np.where(px_norm * ref_norm > 1e-6, px_norm * ref_norm, 1.0)
+    cos_sim = dot / denom
+
+    return pixel_is_neutral | (cos_sim > 0.7)
+
+
 def _colored_mask(
     rgb: np.ndarray,
     sat_threshold: float,
-    local_window: int = 5,
+    local_window: int = 7,
     local_delta: float = 0.1,
-    downsample: int = 3,
+    downsample: int = 4,
+    fringe_dilate_px: int = 1,
 ) -> np.ndarray:
     """Welke pixels tellen als "gekleurd vlak" (en dus weg te vlakken)?
 
@@ -124,8 +179,21 @@ def _colored_mask(
     pixels naast een lichte (bijna-witte) hulplijn in het kleurvlak kregen
     daardoor zelf ook een hoge lokale max, leken zo "opvallend donkerder"
     dan hun buren, en werden per ongeluk als lijn behandeld - met dikke
-    zwarte vegen langs die hulplijnen tot gevolg. Alleen pixels die
-    duidelijk DONKERDER zijn dan hun lokale mediaan blijven als lijn staan.
+    zwarte vegen langs die hulplijnen tot gevolg.
+
+    Alleen "donkerder dan de omgeving" bleek op zijn beurt ook niet genoeg,
+    gevonden bij een heel ander soort bestand: een plattegrond met
+    classificatiezones aangeduid via ARCERING (streeppatronen) i.p.v. vlakke
+    kleur. Zo'n arceringslijn kan, afhankelijk van de kleur inkt, in zijn
+    dunne kern zelf ook bijna zwart renderen (bv. blauwe arcering) - en werd
+    daardoor ten onrechte als "een lijn die beschermd moet blijven" gezien,
+    net als een deur. Het onderscheid: een deurlijn over een kleurvlak neemt
+    de kleur van DAT vlak over (dezelfde tint als zijn omgeving); een
+    arceringslijn heeft juist een EIGEN kleur die niet bij zijn omgeving
+    (meestal wit) hoort. Daarom telt een donkere pixel alleen nog als
+    "beschermde lijn" als zijn kleurzweem overeenkomt met die van zijn
+    lokale omgeving (zie _hue_matches) - wijkt de kleur af, dan is het
+    vermoedelijk zelf een classificatiekleur en mag hij alsnog weg.
 
     Een mediaanfilter op volle resolutie is op een groot ingescand blad
     (tientallen miljoenen pixels) te traag (tientallen seconden). De lokale
@@ -134,14 +202,53 @@ def _colored_mask(
     Eerst uitdunnen (elke `downsample`-ste pixel), daar het venster op
     toepassen, en weer terug opschalen is >100x sneller en geeft vrijwel
     dezelfde uitkomst.
+
+    Het venster moet ook groot genoeg zijn t.o.v. de arceringsdichtheid: bij
+    een fijn KRUIS-arceringspatroon (twee sets diagonale lijnen) is er op de
+    kruispunten lokaal duidelijk meer inkt dan waar de lijnen elkaar niet
+    raken. Een te klein venster (5, uitgedund op elke 3e pixel) ving op die
+    kruispunten zelf ook te veel van die extra inkt mee, waardoor de
+    "lokale vlakkleur" ter plekke zelf licht kleurig werd geschat i.p.v.
+    zuiver wit - en de kruispunt-pixel zo alsnog ten onrechte als
+    "beschermde lijn" telde (zichtbaar als een regelmatig grid van kleine
+    gekleurde kruisjes in het resultaat, op een echt testbestand met een
+    dicht kruisarcering-patroon). Empirisch geverifieerd: een groter venster
+    (7, uitgedund op elke 4e pixel) verdunt de kruispunt-inkt voldoende
+    binnen het venster om weer een zuiver witte schatting te geven (kleur-
+    residu op dat testbestand van 2.8% naar 0.3% van de pixels, wat overeen-
+    kwam met gewone anti-aliasing-ruis) - en heeft, apart geverifieerd tegen
+    dezelfde deur-over-kleurvlak-testgevallen als hierboven, géén meetbaar
+    effect op die eerdere fix (pixel-identieke uitkomst).
+
+    Zelfs met dat grotere venster bleek er nog een LAATSTE restje over: de
+    verzadiging-drempel (`sat_threshold`) pakt alleen de sterk verzadigde
+    KERN van een arceringslijn - het vage anti-aliasing-randje eromheen
+    (bv. RGB 251,245,251, nauwelijks roze) haalt die drempel niet en blijft
+    dus gewoon in het beeld staan. Dat lijkt onschuldig (het is bijna wit),
+    maar de laatste stap in clean_via_raster maakt ELK niet-zuiver-wit pixel
+    volledig ondoorzichtig zwart (nodig om dunne muurlijnen niet te laten
+    verbleken, zie de toelichting daar) - en promoveert zo'n vaag randje
+    alsnog tot volledig zwart. Het resultaat: een dunner "spookbeeld" van
+    dezelfde arcering, nooit echt weg. Opgelost door het te-verwijderen
+    gebied een paar pixels te laten "uitdijen" (dilateren), zodat dat vage
+    randje ook meegepakt wordt. Cruciaal: die uitdijing mag NOOIT een als
+    `is_line_like` beschermd pixel overschrijven - zonder die uitzondering
+    bleek een simpele uitdijing een deurboog/tekst die tegen een gekleurd
+    vlak aan ligt volledig weg te vagen (elke lijnpixel daar ligt namelijk
+    al binnen een paar pixels van een net-verwijderd gekleurd pixel).
+    Geverifieerd op zowel het arcering-bestand (spookbeeld praktisch weg)
+    als de deur-over-kleurvlak-testgevallen (pixel-identiek aan zonder
+    uitdijing).
     """
+    local_median = _local_median_color(rgb, local_window, downsample)
     cmax = rgb.max(axis=2)
-    small = cmax[::downsample, ::downsample]
-    local_median_small = ndimage.median_filter(small, size=local_window)
-    local_median = np.repeat(np.repeat(local_median_small, downsample, axis=0), downsample, axis=1)
-    local_median = local_median[: cmax.shape[0], : cmax.shape[1]]
-    is_line_like = (local_median - cmax) > local_delta
-    return (_saturation(rgb) > sat_threshold) & ~is_line_like
+    local_median_cmax = local_median.max(axis=2)
+    is_darker = (local_median_cmax - cmax) > local_delta
+    is_line_like = is_darker & _hue_matches(rgb, local_median)
+    colored = (_saturation(rgb) > sat_threshold) & ~is_line_like
+    if fringe_dilate_px > 0:
+        colored = ndimage.binary_dilation(colored, iterations=fringe_dilate_px) & ~is_line_like
+    return colored
 
 
 def clean_via_raster(
