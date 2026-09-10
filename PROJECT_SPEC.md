@@ -209,6 +209,32 @@ toegelichte labels "MODE A"/"MODE B" zijn overal waar de gebruiker ze kon
 zien vervangen door een duidelijke omschrijving van wat er daadwerkelijk
 gebeurt (CAD-lagen vs. beeldherkenning).
 
+Ook een tweede, verwante bug in MODE B verholpen: platte PDF's die
+classificatiezones (temperatuur-, drukzones e.d.) aanduiden via een
+gekleurde ARCERING (streeppatroon) i.p.v. een vlakke kleur leverden een
+zwarte lijnenbrij op, omdat diezelfde deur-beschermingslogica hierboven
+arceringslijnen ten onrechte als echte lijntekening zag (een arceringslijn
+kan in zijn dunne kern net zo donker renderen als een deurlijn). Opgelost
+door een donkere pixel alleen nog als beschermde lijn te tellen als zijn
+kleurzweem overeenkomt met die van zijn omgeving — een deurlijn neemt de
+kleur van het vlak eronder over, een arceringslijn heeft een eigen kleur
+die niet bij zijn (meestal witte) omgeving hoort. Zie de toelichting in
+`src/core/raster.py` (`_colored_mask`) voor de volledige onderbouwing,
+inclusief twee vervolgfixes op ditzelfde probleem (kruispunten in een
+dichte kruisarcering, en het anti-aliasing-randje van een arceringslijn).
+
+**Bekende, geaccepteerde beperking hierbij:** voor dit soort platte
+classificatieschema's (geen echte plattegrond, dus zonder betekenisvolle
+"kamers") vindt de ruimtedetectie (zie 2.3) soms tientallen valse
+ruimtes — elk klein, door arceringslijnen omsloten vlak binnen zo'n zone
+telt technisch mee als "omsloten wit gebied". Bewust niet opgelost met een
+grotere afmetingsdrempel: dat zou het risico vergroten dat een echt klein
+kamertje in een NORMALE plattegrond stilzwijgend gemist wordt, en dat
+weegt zwaarder dan wat extra, goed zichtbare (en dus makkelijk handmatig
+te verwijderen) ruis bij dit randgeval. Voor dit bestandstype is vooral de
+opgeschoonde totaalplaat (die exporteert de tool sowieso altijd mee)
+bruikbaar, niet de automatische opsplitsing in losse kamers.
+
 ### 3.4 Nice-to-haves / later
 - Verbeterde automatische detectie (zie route's in sectie 4) — kan
   parallel of ná de UI-versie, vermindert het aantal handmatige correcties
