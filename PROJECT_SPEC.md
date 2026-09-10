@@ -59,6 +59,18 @@ kleurvlak-lagen als `07_00-E RHK_Grade A_ISO-5` en teksten-lagen als
 Dit werkt betrouwbaar en scherp — dit deel hoeft niet opnieuw ontworpen
 te worden, alleen overgenomen/verbeterd.
 
+**Nadien gecorrigeerd:** het alphakanaal werd aanvankelijk geleidelijk
+gezet op basis van helderheid (een lichtgrijze/anti-aliased pixel werd
+een bijna-doorzichtige pixel) i.p.v. hard aan/uit. In de correctiestap
+(tegen een witte achtergrond getoond) viel dat niet op, maar in de
+geëxporteerde PNG (echte transparantie) waren dunne CAD-lijnen daardoor
+nauwelijks zichtbaar — pas gevonden nadat een gebruiker dit zelf moest
+oplossen door in een beeldbewerkingsprogramma de transparantiedrempel te
+verlagen. Opgelost door dezelfde harde zwart/transparant-drempel te
+gebruiken die MODE B (zie 2.2) al had: elke zichtbare pixel wordt nu
+volledig ondoorzichtig zwart, of volledig transparant, geen
+tussenwaarden meer.
+
 ### 2.2 MODE B — geen bruikbare lagen (platgeslagen/gescande PDF)
 
 Fallback: kleurvlakken wegfilteren op HSV-kleurverzadiging, tekst
