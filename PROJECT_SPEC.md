@@ -249,6 +249,23 @@ statustekst tijdens het verwerken nu een oplopende tijdsduur ("Processing...
 (Ns)") - bij een groot/gescand bestand kan dat meer dan een minuut duren,
 en zonder teken van leven leek de pagina dan vastgelopen.
 
+**Naamloze ruimtes krijgen nu al bij detectie een oplopende naam**
+("room_01", "room_02", enz.) in plaats van "(no name)" te tonen totdat pas
+bij export een volgnummer verzonnen werd - onmogelijk om in de correctie-
+stap te zien welk vakje straks welk bestand zou worden. Bewust geen "raad
+de naam uit de dichtstbijzijnde tekst"-terugval toegevoegd (bv. bij een
+PDF met CAD-lagen maar zonder de gebruikelijke ruimtecode-conventie, zie
+2.3): op zo'n bestand staat vaak net zoveel niet-naam-tekst (druk-/
+ventilatiewaarden, GMP-classificaties, maatvoering) als echte namen, en
+een verkeerd geraden naam is misleidender dan een neutraal volgnummer.
+"room_01" is nu een ECHTE naam (geen speciaal geval meer) - komt dus
+vanaf het begin al overeen met de uiteindelijke bestandsnaam, ook zonder
+dat de gebruiker er iets aan hoeft te doen. Exportlogica in export.py
+tegelijk aangepast: een botsing tussen zo'n al-toegekende naam en de
+terugvalnaam van een later nog naamloos vak (bv. een handmatig getekend
+vakje) krijgt nu netjes de bestaande "_1/_2"-suffix i.p.v. dat het ene
+bestand het andere stilzwijgend overschrijft.
+
 ### 3.4 Nice-to-haves / later
 - Verbeterde automatische detectie (zie route's in sectie 4) — kan
   parallel of ná de UI-versie, vermindert het aantal handmatige correcties
