@@ -63,6 +63,30 @@ def boxes_to_room_records(
     ]
 
 
+def assign_placeholder_names(rooms: list[RoomRecord]) -> None:
+    """Geeft elke ruimte zonder herkende naam (geen ruimtecode-anker in de
+    PDF-tekst gevonden, of geen OCR-tekst dichtbij genoeg) een eigen,
+    oplopende naam "room_01", "room_02", enz. - in dezelfde volgorde
+    (boven->onder, dan links->rechts) die save_room_crops() bij export ook
+    gebruikt voor nog-naamloze vakken.
+
+    Bewust GEEN "raad de naam uit de dichtstbijzijnde tekst"-terugval
+    (zoals MODE B's OCR-matching al doet): bij een PDF met CAD-lagen staat
+    er vaak net zoveel niet-naam-tekst (drukwaarden, ventilatievouden,
+    GMP-classificaties, maatvoering) als echte ruimtenamen, en een verkeerd
+    geraden naam is misleidender dan een neutraal volgnummer. Dit maakt
+    "room_01" een ECHTE naam (geen speciaal geval meer) - zo komt de naam
+    die de gebruiker in de correctiestap ziet vanaf het begin al overeen
+    met de bestandsnaam die de export ervoor zal gebruiken, ook al wordt
+    er verder niks aan de ruimte veranderd."""
+    ordered = sorted(rooms, key=lambda r: (r.bbox[1], r.bbox[0]))
+    counter = 0
+    for room in ordered:
+        if not room.name:
+            counter += 1
+            room.name = f"room_{counter:02d}"
+
+
 def run_room_detection(
     page,
     scale: float,
@@ -95,6 +119,7 @@ def run_room_detection(
             entry.room_id = f"room_{entry.room_id}"
 
     rooms = boxes_to_room_records(room_boxes, room_names)
+    assign_placeholder_names(rooms)
     return DetectionResult(rooms=rooms, anchor_log=anchor_log, mode_a=clean_result.mode_a)
 
 

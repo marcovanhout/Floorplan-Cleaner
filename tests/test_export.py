@@ -51,6 +51,24 @@ def test_write_room_log_reports_missing_names(tmp_path):
     assert "Toilet (code TL-1.01)" not in content  # kreeg wel een PNG, hoort niet in de lijst
 
 
+def test_save_room_crops_suffixes_collision_between_named_and_fallback_room(tmp_path):
+    # Eén ruimte heet al letterlijk "room_01" (bv. toegekend door
+    # assign_placeholder_names bij de detectie), de andere is nog naamloos
+    # (bv. een handmatig getekend vakje) en zou dezelfde terugvalnaam
+    # krijgen. Beide moeten hun eigen bestand houden (met _1/_2-suffix),
+    # niet dat de tweede de eerste stilzwijgend overschrijft.
+    img = _blank_image()
+    rooms = [
+        RoomRecord(id="room_a", bbox=(50, 50, 150, 150), name="room_01"),
+        RoomRecord(id="room_b", bbox=(200, 50, 300, 150), name=None),
+    ]
+    filenames = save_room_crops(img, rooms, str(tmp_path))
+    assert filenames["room_a"] == "room_01_1.png"
+    assert filenames["room_b"] == "room_01_2.png"
+    assert (tmp_path / "room_01_1.png").exists()
+    assert (tmp_path / "room_01_2.png").exists()
+
+
 def test_save_room_crops_skips_room_entirely_outside_image(tmp_path):
     img = _blank_image(w=400, h=400)
     rooms = [

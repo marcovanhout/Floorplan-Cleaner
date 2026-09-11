@@ -33,18 +33,29 @@ def save_room_crops(
 
     # Tel hoe vaak elke (gesaneerde) naam voorkomt, zodat we ALLE
     # instanties van een dubbele naam nummeren (naam_1, naam_2, ...),
-    # niet alleen de tweede en volgende.
+    # niet alleen de tweede en volgende. Een nog-naamloos vak (bv. een
+    # handmatig getekend vakje dat nooit hernoemd is - de meeste ruimtes
+    # krijgen inmiddels al bij de detectie een naam, zie
+    # pipeline.assign_placeholder_names) krijgt hier zijn "room_NN"-
+    # terugvalnaam AL toegekend, in dezelfde stap als echte namen -
+    # zo telt zo'n terugvalnaam gewoon mee in name_counts en krijgt een
+    # eventuele botsing met een al bestaande "room_NN" dezelfde _1/_2-
+    # suffix als elke andere dubbele naam, i.p.v. dat het ene bestand het
+    # andere stilzwijgend overschrijft.
     name_counts: dict[str, int] = {}
-    bases: dict[str, str | None] = {}
+    bases: dict[str, str] = {}
+    unnamed_counter = 0
     for room in ordered:
-        base = sanitize_filename(room.name) if room.name else None
+        if room.name:
+            base = sanitize_filename(room.name)
+        else:
+            unnamed_counter += 1
+            base = f"room_{unnamed_counter:02d}"
         bases[room.id] = base
-        if base:
-            name_counts[base] = name_counts.get(base, 0) + 1
+        name_counts[base] = name_counts.get(base, 0) + 1
 
     id_to_filename: dict[str, str] = {}
     running: dict[str, int] = {}
-    unnamed_counter = 0
     for room in ordered:
         # Vak kan uit de correctie-UI komen (handmatig getekend/versleept) -
         # clip naar de afbeeldingsgrenzen en sla over als er dan niets
@@ -66,15 +77,11 @@ def save_room_crops(
         cx1, cy1 = min(W, x1 + mx), min(H, y1 + my)
 
         base = bases[room.id]
-        if base:
-            running[base] = running.get(base, 0) + 1
-            if name_counts[base] > 1:
-                filename = f"{base}_{running[base]}.png"
-            else:
-                filename = f"{base}.png"
+        running[base] = running.get(base, 0) + 1
+        if name_counts[base] > 1:
+            filename = f"{base}_{running[base]}.png"
         else:
-            unnamed_counter += 1
-            filename = f"room_{unnamed_counter:02d}.png"
+            filename = f"{base}.png"
 
         crop = clean_img.crop((cx0, cy0, cx1, cy1))
         path = os.path.join(out_dir, filename)
