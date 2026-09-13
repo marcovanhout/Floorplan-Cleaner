@@ -56,3 +56,7 @@ GitHub release.
   is private. Test files in `tests/fixtures/` are exclusively synthetic
   (see `tests/fixtures/generate_fixtures.py`).
 - Everything offline: no network calls while processing a PDF.
+
+## License
+
+[MIT](LICENSE)
