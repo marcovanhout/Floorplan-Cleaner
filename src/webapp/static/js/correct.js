@@ -3,6 +3,8 @@
   const jobId = document.querySelector(".correct-page").dataset.jobId;
   const loadingEl = document.getElementById("loading");
   const statusEl = document.getElementById("status-msg");
+  const exportStatusEl = document.getElementById("export-status");
+  const downloadBtn = document.getElementById("btn-download");
 
   const ROOM_COLOR = "#2f6f4f";
   const ROOM_COLOR_SELECTED = "#c9622a";
@@ -19,6 +21,15 @@
   // Waarschuwt bij "Terug" als er nog niet-geëxporteerde wijzigingen zijn
   // (correcties leven alleen client-side totdat er geëxporteerd wordt).
   let hasUnsavedChanges = false;
+
+  // Elke wijziging na een export moet ook de downloadknop laten zien dat
+  // die niet meer actueel is (zie .updating in app.css) - dit ene punt
+  // aanroepen i.p.v. overal los "hasUnsavedChanges = true" + knop-update
+  // te herhalen voorkomt dat een van de vele wijzig-plekken dat vergeet.
+  function markUnsaved() {
+    hasUnsavedChanges = true;
+    if (downloadBtn && !downloadBtn.hidden) downloadBtn.classList.add("updating");
+  }
   // Volgorde van selectie - onbeperkt aantal, zowel via los ctrl-klikken
   // als via een marquee-selectiekader (zie setupMarqueeSelect). "Samenvoegen"
   // en "Verwijderen" werken allebei voor elk aantal (2 of meer resp. 1 of
@@ -64,7 +75,7 @@
     if (!snap.imageBlob) {
       rooms = snap.rooms;
       redrawAll();
-      hasUnsavedChanges = true;
+      markUnsaved();
       return;
     }
     const prevWidth = imageWidth;
@@ -92,7 +103,7 @@
         fitToContainer();
       }
       redrawAll();
-      hasUnsavedChanges = true;
+      markUnsaved();
     } catch (err) {
       showStatus("Undo failed: " + err.message, true);
     }
@@ -306,7 +317,7 @@
 
     room.bbox = [Math.round(x0), Math.round(y0), Math.round(x0 + width), Math.round(y0 + height)];
     room.source = room.source === "auto" ? "user-edited" : room.source;
-    hasUnsavedChanges = true;
+    markUnsaved();
   }
 
   // ---- hernoemen (HTML input overlay op Konva.Text) ----------------------
@@ -341,7 +352,7 @@
       if (room.source === "auto") room.source = "user-edited";
       syncNodeToRoom(room);
       document.body.removeChild(input);
-      hasUnsavedChanges = true;
+      markUnsaved();
     }
     input.addEventListener("blur", commit);
     input.addEventListener("keydown", (e) => {
@@ -367,7 +378,7 @@
     });
     selectedIds = [];
     applySelection();
-    hasUnsavedChanges = true;
+    markUnsaved();
   }
 
   // Samenvoegen van 2 of meer vakken (bv. een kamer + de deurvakjes die er
@@ -409,7 +420,7 @@
     buildRoomNode(merged);
     selectedIds = [];
     applySelection();
-    hasUnsavedChanges = true;
+    markUnsaved();
   }
 
   // ---- nieuw vak tekenen -----------------------------------------------
@@ -496,7 +507,7 @@
       setTool("select");
       selectRoom(room.id, false);
       startRename(room.id);
-      hasUnsavedChanges = true;
+      markUnsaved();
       // mousedown EN mouseup van deze teken-actie vonden beide plaats op de
       // achtergrond, dus Konva vuurt hierna nog een synthetische "click" op
       // diezelfde achtergrond af - zonder deze vlag zou de stage-click-
@@ -536,7 +547,7 @@
       // fitToContainer/redrawAll nodig, die zijn voor roteren waar de
       // afbeeldingsgrootte wel kan wijzigen).
       await loadBackgroundImage(`/jobs/${jobId}/image?t=${Date.now()}`);
-      hasUnsavedChanges = true;
+      markUnsaved();
     } catch (err) {
       showStatus("Erase failed: " + err.message, true);
     }
@@ -828,7 +839,7 @@
       await loadBackgroundImage(`/jobs/${jobId}/image?t=${Date.now()}`);
       fitToContainer();
       redrawAll();
-      hasUnsavedChanges = true;
+      markUnsaved();
     } catch (err) {
       showStatus(errorPrefix + err.message, true);
     }
@@ -1010,7 +1021,14 @@
 
   async function doExport() {
     clearStatus();
-    showStatus("Exporting...");
+    exportStatusEl.hidden = false;
+    // Dimt een al-zichtbare downloadknop van een vorige export (i.p.v. 'm
+    // te verbergen) - dezelfde "updating"-klasse die ook aangeeft dat de
+    // knop niet meer bij de huidige staat hoort na een latere wijziging,
+    // zie markUnsaved(). Zo blijft duidelijk dat er al eerder
+    // geëxporteerd is, terwijl ook duidelijk is dat dat bestand nu wordt
+    // bijgewerkt.
+    if (!downloadBtn.hidden) downloadBtn.classList.add("updating");
     try {
       const resp = await fetch(`/jobs/${jobId}/export`, {
         method: "POST",
@@ -1022,14 +1040,14 @@
         throw new Error(text || `Server error (${resp.status})`);
       }
       const data = await resp.json();
-      clearStatus();
       hasUnsavedChanges = false;
-      const resultEl = document.getElementById("export-result");
-      const link = document.getElementById("download-link");
-      link.href = data.download_url;
-      resultEl.hidden = false;
-      resultEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      downloadBtn.href = data.download_url;
+      downloadBtn.hidden = false;
+      downloadBtn.classList.remove("updating");
+      exportStatusEl.hidden = true;
     } catch (err) {
+      downloadBtn.classList.remove("updating");
+      exportStatusEl.hidden = true;
       showStatus("Export failed: " + err.message, true);
     }
   }

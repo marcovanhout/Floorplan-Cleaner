@@ -226,11 +226,14 @@ def export_rooms(
     pdf_path: str,
     anchor_log: list,
     mode_a: bool,
-    margin_frac: float = 0.35,
-    min_margin_px: int = 120,
+    scale: float,
+    margin_frac: float = 0.15,
 ) -> ExportResult:
+    # Marge-logica (basismarge + per-kant uitbreiding richting aangrenzende
+    # deur-achtige vakken) zit in save_room_crops zelf, zie de toelichting
+    # daar.
     id_to_filename = save_room_crops(
-        clean_img, rooms, out_dir, margin_frac=margin_frac, min_margin_px=min_margin_px
+        clean_img, rooms, out_dir, scale=scale, margin_frac=margin_frac
     )
     import os
 

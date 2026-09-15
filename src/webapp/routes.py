@@ -300,7 +300,7 @@ def export(job_id):
     out_dir = job.tmp_dir / "export"
     result = export_rooms(
         job.clean_image, rooms, str(out_dir), job.pdf_original_name,
-        job.anchor_log, job.mode_a, margin_frac=margin_frac,
+        job.anchor_log, job.mode_a, scale=job.scale, margin_frac=margin_frac,
     )
 
     # De totale opgeschoonde plattegrond hoort ook in de export te zitten
