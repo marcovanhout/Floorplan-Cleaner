@@ -266,6 +266,42 @@ terugvalnaam van een later nog naamloos vak (bv. een handmatig getekend
 vakje) krijgt nu netjes de bestaande "_1/_2"-suffix i.p.v. dat het ene
 bestand het andere stilzwijgend overschrijft.
 
+**Marge bij export: per aangrenzende deur i.p.v. één vaste waarde voor de
+hele ruimte.** Eerst geprobeerd met een vaste marge (als percentage van
+de ruimte-afmeting, later als vaste schaal-bewuste ondergrens) groot
+genoeg voor de breedst uitstekende deur op het hele bestand — bleek altijd
+een verkeerde afweging: groot genoeg voor de lastigste deur is overdreven
+ruim voor de meeste andere kanten (ook lege), klein genoeg om er strak
+uit te zien sneed elders weer deuren af. Nu wordt per kant van een ruimte
+gekeken of er een echt deur-vormig vakje aangrenzend ligt, en alleen díe
+kant wordt uitgebreid tot voorbij dat vakje — een lege kant blijft strak.
+"Deur-vormig" wordt per tekening opnieuw bepaald (niet een vast getal):
+gezocht wordt naar de natuurlijke kloof in de gevonden vakgroottes van
+díe specifieke tekening. Een simpelere aanpak (kleiner dan een vast
+percentage van de MEDIAAN-vakgrootte) bleek te falen zodra een tekening
+meer deur- dan kamer-vakken heeft (bv. een gang met veel kleine kamers) —
+dan valt de mediaan zelf al middenin de deur-vakjes.
+
+Bewust geen automatische oplossing gebouwd voor een deur die tussen twee
+ruimtes in ligt en dus bij beide zou moeten horen (zie 2.3-achtige
+afweging): elke geopperde automatische aanpak (grootste/kleinste vak
+als kamer/deur aannemen, kleine vakjes automatisch meezuigen bij een
+grotere buur) had een reëel risico om het verkeerd te doen op een net
+iets ander bestand (bv. een wc-formaat ruimte, of meerdere kleine
+ruimtes naast een grote die er NIET bij horen). Blijft dus een
+handmatige stap via "Merge" (zie hierboven).
+
+**Export en downloadknop staan niet meer in de werkbalk maar op hun
+eigen regel direct onder het correctievenster.** Ze stonden eerst in de
+(smalle, met veel knoppen al gevulde) werkbalk; zodra de downloadknop na
+de eerste export verscheen werd de werkbalk net te breed en sprongen de
+knoppen naar een tweede regel. Op hun eigen regel onder het canvas is
+nooit ruimtegebrek. De downloadknop dimt bovendien zodra er ná de laatste
+export nog iets gewijzigd is (hergebruikt de bestaande "niet-opgeslagen
+wijzigingen"-registratie die ook de "Terug"-waarschuwing al gebruikte) -
+blijft wel gewoon klikbaar, maar zo is in één oogopslag te zien of het
+gedownloade bestand nog actueel is.
+
 ### 3.4 Nice-to-haves / later
 - Verbeterde automatische detectie (zie route's in sectie 4) — kan
   parallel of ná de UI-versie, vermindert het aantal handmatige correcties
