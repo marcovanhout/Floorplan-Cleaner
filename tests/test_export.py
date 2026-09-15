@@ -1,7 +1,7 @@
 import numpy as np
 from PIL import Image
 
-from src.core.export import save_room_crops, write_room_log
+from src.core.export import _estimate_door_area_threshold, save_room_crops, write_room_log
 from src.core.types import AnchorLogEntry, RoomRecord
 
 
@@ -30,8 +30,73 @@ def test_save_room_crops_names_and_numbers_duplicates(tmp_path):
 def test_save_room_crops_applies_margin_and_clips_to_bounds(tmp_path):
     img = _blank_image(w=400, h=400)
     rooms = [RoomRecord(id="room_1", bbox=(10, 10, 60, 60), name="Hoek")]
-    filenames = save_room_crops(img, rooms, str(tmp_path), margin_frac=0.5, min_margin_px=5)
+    filenames = save_room_crops(img, rooms, str(tmp_path), scale=1.0, margin_frac=0.5)
     assert filenames["room_1"] == "hoek.png"
+    # bbox is 50x50; margin_frac=0.5 zou 25px marge geven, maar de vaste
+    # basismarge (30px op scale=1.0) is hier groter en wint dus - marge
+    # links/boven klipt bovendien tegen de rand van de afbeelding (10-30<0).
+    with Image.open(tmp_path / "hoek.png") as crop:
+        assert crop.size == (90, 90)
+
+
+def test_estimate_door_area_threshold_finds_gap_between_door_and_room_cluster():
+    # 44 deur-vakjes (33489-46872) vs 17 echte ruimtes (126994+) - zelfde
+    # verhouding als het echte testbestand (W-WR-68-011) waarop de simpele
+    # mediaan-aanpak faalde, omdat er dan meer deur- dan kamer-vakjes zijn.
+    door_areas = [33489, 33672, 33672, 39204, 39402, 39402, 39600, 39601, 46440, 46872] * 4
+    door_areas = door_areas[:44]
+    room_areas = [126994, 127380, 179600, 385440, 452693, 474144, 802648, 1354203]
+    threshold = _estimate_door_area_threshold(door_areas + room_areas)
+    assert max(door_areas) < threshold < min(room_areas)
+
+
+def test_estimate_door_area_threshold_returns_zero_without_clear_gap():
+    # Alle vakken ongeveer even groot - geen zinnige "deur vs. kamer"-knip
+    # te maken, dus geen aanname doen (drempel 0 => nooit deur-achtig).
+    similar_areas = [10000, 10500, 9800, 10200, 9900, 10100, 10300]
+    assert _estimate_door_area_threshold(similar_areas) == 0.0
+
+
+def test_save_room_crops_extends_crop_toward_adjacent_doorlike_box(tmp_path):
+    # Kamer (400x400) met een klein, deur-achtig vak dat direct tegen de
+    # bovenkant aan ligt en verder naar boven uitsteekt dan de gewone
+    # basismarge alleen zou reiken - de uitsnede moet specifiek op die
+    # kant uitgebreid worden tot voorbij het deur-vakje (plus buffer).
+    # Een paar losstaande, normaal-grote "vulruimtes" erbij zodat de
+    # grootte-clustering (zie _estimate_door_area_threshold) genoeg data
+    # heeft om het deur-vakje betrouwbaar als klein te herkennen - met
+    # te weinig ruimtes in totaal durft die functie geen aanname te doen.
+    img = _blank_image(w=2000, h=2000)
+    room = RoomRecord(id="room_1", bbox=(300, 300, 700, 700), name="Kamer")
+    door = RoomRecord(id="room_2", bbox=(450, 150, 550, 300), name=None)  # raakt de bovenkant
+    fillers = [
+        RoomRecord(id=f"filler_{i}", bbox=(1200 + i * 400, 1200, 1580 + i * 400, 1580), name=f"Vulruimte {i}")
+        for i in range(3)
+    ]
+    save_room_crops(img, [room, door, *fillers], str(tmp_path), scale=1.0)
+
+    with Image.open(tmp_path / "kamer.png") as crop:
+        # Basismarge alleen (0.15 * 400 = 60) zou bij y=300-60=240 stoppen;
+        # het deur-vakje steekt door tot y=150, dus de bovenkant van de
+        # uitsnede moet ruim voorbij dat punt liggen (150 - buffer), en
+        # zeker niet bij de kale basismarge (240) blijven steken.
+        assert crop.size == (520, 630)
+
+
+def test_save_room_crops_ignores_doorlike_box_that_is_not_adjacent(tmp_path):
+    img = _blank_image(w=2000, h=2000)
+    room = RoomRecord(id="room_1", bbox=(300, 300, 700, 700), name="Kamer")
+    far_away_small_box = RoomRecord(id="room_2", bbox=(10, 10, 60, 60), name=None)
+    fillers = [
+        RoomRecord(id=f"filler_{i}", bbox=(1200 + i * 400, 1200, 1580 + i * 400, 1580), name=f"Vulruimte {i}")
+        for i in range(3)
+    ]
+    save_room_crops(img, [room, far_away_small_box, *fillers], str(tmp_path), scale=1.0)
+
+    with Image.open(tmp_path / "kamer.png") as crop:
+        # Geen enkel aangrenzend deur-vakje - alleen de kale basismarge
+        # (0.15 * 400 = 60 op elke kant) hoort toegepast te worden.
+        assert crop.size == (520, 520)
 
 
 def test_write_room_log_reports_missing_names(tmp_path):

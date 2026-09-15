@@ -113,6 +113,7 @@ def main():
                 args.input_pdf,
                 detection.anchor_log,
                 clean_result.mode_a,
+                scale=args.scale,
                 margin_frac=args.room_margin,
             )
             print(f"{len(result.filenames)} separate room PNG(s) saved in: {out_dir}")

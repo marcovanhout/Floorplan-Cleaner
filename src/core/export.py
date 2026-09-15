@@ -15,21 +15,97 @@ from .types import AnchorLogEntry, RoomRecord
 
 logger = logging.getLogger(__name__)
 
+# Basismarge (voor kanten ZONDER aangrenzende deur) - puur voor visuele
+# ademruimte rond de muren zelf. Bewust klein: het vangen van een
+# deurzwaai is de taak van de deur-detectie hieronder, niet van deze
+# marge (die eerder als vaste, ruime waarde ook deuren moest vangen, en
+# daardoor op elke kant - ook lege - even groot moest zijn: te ruim voor
+# de meeste kanten, of alsnog te krap voor de grootste deurzwaai).
+BASE_MARGIN_MIN_PT = 30.0
+
+# Hoever een vak nog als "ertegenaan" telt (i.p.v. toevallig ergens
+# anders in de tekening te staan), en hoeveel extra ruimte NA het
+# deur-vakje zelf nog wordt meegenomen (voor het deurklink-/
+# scharniersymbool net buiten de kern van de deurzwaai).
+DOOR_TOUCH_TOLERANCE_PT = 15.0
+DOOR_EXTRA_BUFFER_PT = 20.0
+
+
+def _is_doorlike(bbox: tuple[int, int, int, int], door_area_threshold: float) -> bool:
+    w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    return door_area_threshold > 0 and (w * h) < door_area_threshold
+
+
+def _estimate_door_area_threshold(areas: list[float]) -> float:
+    """Schat de scheidingsgrens tussen een "deur-achtig" klein vakje en een
+    echte ruimte, VOOR DEZE tekening specifiek.
+
+    Eerste poging was simpel: alles kleiner dan 35% van de MEDIAAN-
+    vakgrootte. Bleek onbetrouwbaar op een tekening met veel deur-vakjes
+    t.o.v. weinig echte ruimtes (bv. een lange gang met veel kleine
+    kamers): dan bestaat al meer dan de helft van alle gevonden vakken uit
+    deur-vakjes, en valt de mediaan zelf al middenin die groep i.p.v. bij
+    de grens met de echte ruimtes (concreet gezien op W-WR-68-011: 44
+    deur-vakjes tegenover 17 echte ruimtes).
+
+    In plaats daarvan: zoek naar de grootste RELATIEVE sprong tussen
+    opeenvolgende (gesorteerde) vakgroottes - in de praktijk zit er een
+    duidelijke kloof tussen "deur-vakjes" (die onderling qua grootte
+    weinig verschillen) en "echte ruimtes" (die ook onderling verschillen,
+    maar als groep een stuk groter zijn) - op het geteste bestand bv. een
+    sprong van >2,7x tussen het grootste deur-vakje en de kleinste echte
+    ruimte, tegen hooguit een paar procent verschil binnen elke groep
+    afzonderlijk. De zoekruimte is beperkt tot het 10e-90e percentiel van
+    de gesorteerde lijst, zodat een toevallige uitschieter (bv. één
+    extreem grote ruimte, of de buitenmuur-omtrek als geheel) niet per
+    ongeluk als "de" grens wordt aangezien.
+    """
+    positive = sorted(a for a in areas if a > 0)
+    n = len(positive)
+    if n < 4:
+        return 0.0  # te weinig data om betrouwbaar te clusteren
+    lo = max(1, round(n * 0.1))
+    hi = min(n - 1, round(n * 0.9))
+    best_ratio, best_idx = 1.0, None
+    for i in range(lo, hi):
+        ratio = positive[i] / positive[i - 1]
+        if ratio > best_ratio:
+            best_ratio, best_idx = ratio, i
+    if best_idx is None or best_ratio < 1.5:
+        return 0.0  # geen duidelijke kloof gevonden - geen aanname doen
+    return (positive[best_idx - 1] + positive[best_idx]) / 2
+
 
 def save_room_crops(
     clean_img: Image.Image,
     rooms: list[RoomRecord],
     out_dir: str,
-    margin_frac: float = 0.35,
-    min_margin_px: int = 120,
+    scale: float = 1.0,
+    margin_frac: float = 0.15,
 ) -> dict[str, str]:
     """Snijd elke ruimte uit clean_img met marge en sla op als PNG.
+
+    De marge is per kant: kanten zonder aangrenzend deur-achtig vak
+    krijgen alleen een kleine, vaste basismarge (BASE_MARGIN_MIN_PT); een
+    kant met een aangrenzend klein vak (vrijwel altijd een deur, zie
+    _is_doorlike) wordt specifiek op die kant uitgebreid tot voorbij dat
+    vak. Zo blijft een lege kant strak, en krijgt een deur - ongeacht hoe
+    ver die toevallig uitsteekt - altijd precies genoeg ruimte, in plaats
+    van één vaste marge die voor de ene deur te krap en voor de andere
+    kant te ruim is (empirisch bleek de benodigde marge tussen deuren op
+    hetzelfde bestand al 2x te verschillen - zie git-historie).
 
     Retourneert {room.id: bestandsnaam}.
     """
     os.makedirs(out_dir, exist_ok=True)
     W, H = clean_img.size
     ordered = sorted(rooms, key=lambda r: (r.bbox[1], r.bbox[0]))
+
+    base_min_margin_px = round(BASE_MARGIN_MIN_PT * scale)
+    touch_tol_px = round(DOOR_TOUCH_TOLERANCE_PT * scale)
+    door_buffer_px = round(DOOR_EXTRA_BUFFER_PT * scale)
+    areas = [(r.bbox[2] - r.bbox[0]) * (r.bbox[3] - r.bbox[1]) for r in rooms]
+    door_area_threshold = _estimate_door_area_threshold(areas)
 
     # Tel hoe vaak elke (gesaneerde) naam voorkomt, zodat we ALLE
     # instanties van een dubbele naam nummeren (naam_1, naam_2, ...),
@@ -71,10 +147,31 @@ def save_room_crops(
             continue
 
         bw, bh = x1 - x0, y1 - y0
-        mx = max(int(bw * margin_frac), min_margin_px)
-        my = max(int(bh * margin_frac), min_margin_px)
-        cx0, cy0 = max(0, x0 - mx), max(0, y0 - my)
-        cx1, cy1 = min(W, x1 + mx), min(H, y1 + my)
+        mx = max(int(bw * margin_frac), base_min_margin_px)
+        my = max(int(bh * margin_frac), base_min_margin_px)
+        cx0, cy0, cx1, cy1 = x0 - mx, y0 - my, x1 + mx, y1 + my
+
+        # Kanten met een aangrenzend deur-achtig vak specifiek uitbreiden
+        # tot voorbij dat vak (i.p.v. te vertrouwen op de vaste basismarge
+        # hierboven, die daar niet voor bedoeld is).
+        for other in rooms:
+            if other.id == room.id or not _is_doorlike(other.bbox, door_area_threshold):
+                continue
+            ox0, oy0, ox1, oy1 = other.bbox
+            touching = not (
+                ox1 < x0 - touch_tol_px
+                or ox0 > x1 + touch_tol_px
+                or oy1 < y0 - touch_tol_px
+                or oy0 > y1 + touch_tol_px
+            )
+            if touching:
+                cx0 = min(cx0, ox0 - door_buffer_px)
+                cy0 = min(cy0, oy0 - door_buffer_px)
+                cx1 = max(cx1, ox1 + door_buffer_px)
+                cy1 = max(cy1, oy1 + door_buffer_px)
+
+        cx0, cy0 = max(0, cx0), max(0, cy0)
+        cx1, cy1 = min(W, cx1), min(H, cy1)
 
         base = bases[room.id]
         running[base] = running.get(base, 0) + 1
