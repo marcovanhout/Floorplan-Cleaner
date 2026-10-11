@@ -417,6 +417,7 @@ niet op tegen de kwaliteitswinst.
   fetch_libredwg.py  - haalt de vastgepinde LibreDWG op naar /vendor
   /spikes            - losse onderzoeksscripts (uitvoer in _out/, genegeerd)
 /vendor              - LibreDWG-binaries, NIET gecommit (genegeerd)
+/docs                - gebruikershandleiding (Word, Nederlands)
 /packaging           - PyInstaller-config
 /.github/workflows   - tests + build .exe (+ rooktest) bij release
 README.md, LICENSE, THIRD_PARTY_NOTICES.md

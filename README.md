@@ -8,6 +8,9 @@ for the full background and scope.
 
 ## Usage (end user)
 
+A complete user manual in Dutch (installation, every step and button,
+troubleshooting) is in [docs/Floorplan Cleaner Handleiding.docx](docs/Floorplan%20Cleaner%20Handleiding.docx).
+
 Download `FloorplanCleaner.exe` from the [releases](../../releases) and double-click
 it. A console window appears and the app opens in your browser at
 `http://127.0.0.1:<port>`. Leave the console window open while you use the app;
