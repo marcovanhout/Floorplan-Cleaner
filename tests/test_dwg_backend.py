@@ -131,7 +131,7 @@ def test_repair_discards_unreadable_block_clipping(monkeypatch):
 
 def test_missing_xrefs_are_reported():
     doc = _new_doc()
-    doc.add_xref_def(r"C:\projects\Kelder.dwg", "Kelder")
+    doc.add_xref_def(r"P:\Project\Kelder.dwg", "Kelder")
     assert dwg.missing_xrefs(doc) == ["Kelder.dwg"]
 
 

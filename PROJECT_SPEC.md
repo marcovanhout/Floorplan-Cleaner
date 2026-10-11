@@ -12,7 +12,8 @@ worden.
 
 Input: een PDF-plattegrond (meestal een AutoCAD-export, bv. vanuit een
 Revit/AutoCAD-workflow, met reinheidsklasse/GMP-kleurvlakken, tekst,
-maatvoering en een titelblok).
+maatvoering en een titelblok), of — sinds v0.7.0 — rechtstreeks een
+DWG-bestand (zie 3.5).
 
 Output:
 1. Eén schone PNG van de hele plattegrond: alleen muren, deuren, ramen en
@@ -385,28 +386,41 @@ niet op tegen de kwaliteitswinst.
 
 - **Alles offline**: geen enkele netwerkcall tijdens verwerking.
 - **Geen echte klanttekeningen in de repo**: gebruik voor tests
-  bewerkte/nagemaakte voorbeeldbestanden, nooit echte klant- (of
-  andere klant-) PDF's, voor het geval de repo ooit gedeeld wordt.
-- **Repo privé** houden.
+  bewerkte/nagemaakte voorbeeldbestanden, nooit echte klanttekeningen
+  (PDF of DWG). Echte testbestanden staan alleen lokaal in `Test PDF/`
+  (genegeerd door git).
+- **Repo is openbaar** (sinds september 2026, MIT-licentie): geen klant-,
+  project- of werkgeversnamen en geen tekeningnummers in code, tests of
+  documentatie. Commits gaan via het GitHub-noreply-adres.
+- **Software van derden** alleen als de licentie zakelijk gebruik en
+  meeleveren toestaat; LibreDWG (GPL-3) draait als los programma naast de
+  tool, met licentie en broncode bij elke release (`THIRD_PARTY_NOTICES.md`).
 - Windows 10/11 als primair doelplatform; geen aannames over macOS/Linux
   nodig voor v1 van de rebuild.
 
 ---
 
-## 6. Voorgestelde repo-structuur
+## 6. Repo-structuur
 
 ```
 /src
-  /core           - herbruikte verwerkingslogica (layers, black-line
-                    normalisatie, room-detectie, naam-matching, logging)
-  /webapp         - lokale UI-laag (Flask/Streamlit), incl. de
-                    controle-/correctiestap uit 3.3
+  /core              - verwerkingslogica (lagen, zwart-maken, ruimte-
+                       detectie, naam-matching, export, logging), incl.
+                       dwg.py + dwg_pdf_backend.py (DWG -> PDF, zie 3.5)
+  /webapp            - lokale UI-laag (Flask + Konva.js), incl. de
+                       controle-/correctiestap uit 3.3
+  cli.py, launcher.py
 /tests
-  /fixtures       - alleen bewerkte/synthetische voorbeeld-PDF's
-/packaging        - PyInstaller-config
-/.github/workflows - build .exe bij release
-README.md
-PROJECT_SPEC.md   - dit document
+  /fixtures          - alleen synthetische voorbeeldbestanden (PDF + DWG),
+                       gemaakt door generate_fixtures.py
+/scripts
+  fetch_libredwg.py  - haalt de vastgepinde LibreDWG op naar /vendor
+  /spikes            - losse onderzoeksscripts (uitvoer in _out/, genegeerd)
+/vendor              - LibreDWG-binaries, NIET gecommit (genegeerd)
+/packaging           - PyInstaller-config
+/.github/workflows   - tests + build .exe (+ rooktest) bij release
+README.md, LICENSE, THIRD_PARTY_NOTICES.md
+PROJECT_SPEC.md      - dit document
 ```
 
 ---
@@ -422,7 +436,8 @@ PROJECT_SPEC.md   - dit document
    rechthoeken (bv. via een JS-canvaslaag), of eenvoudiger met een lijst
    + coördinaatvelden?
    → Canvas met sleepbare/resizebare rechthoeken (`Konva.Transformer`),
-   incl. Shift+slepen om meerdere vakken tegelijk te selecteren, zie 3.3.
+   incl. Ctrl-klik / Ctrl+slepen om meerdere vakken tegelijk te
+   selecteren, zie 3.3.
 3. Welke minimale Windows-versie/Python-runtime-bundeling geeft de
    kleinste/robuustste `.exe`?
    → Python 3.11, PyInstaller `--onefile`, gebouwd via GitHub Actions op

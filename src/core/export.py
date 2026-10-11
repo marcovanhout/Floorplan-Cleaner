@@ -45,7 +45,7 @@ def _estimate_door_area_threshold(areas: list[float]) -> float:
     t.o.v. weinig echte ruimtes (bv. een lange gang met veel kleine
     kamers): dan bestaat al meer dan de helft van alle gevonden vakken uit
     deur-vakjes, en valt de mediaan zelf al middenin die groep i.p.v. bij
-    de grens met de echte ruimtes (concreet gezien op testtekening: 44
+    de grens met de echte ruimtes (concreet gezien op een echte testtekening: 44
     deur-vakjes tegenover 17 echte ruimtes).
 
     In plaats daarvan: zoek naar de grootste RELATIEVE sprong tussen

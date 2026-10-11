@@ -62,8 +62,9 @@ GitHub release.
 
 ## Important
 
-- **Never commit real customer drawings to this repo** — even though the repo
-  is private. Test files in `tests/fixtures/` are exclusively synthetic
+- **Never commit real customer drawings to this repo** — the repo is public.
+  Also keep customer, project and employer names and drawing numbers out of
+  code, tests and docs. Test files in `tests/fixtures/` are exclusively synthetic
   (see `tests/fixtures/generate_fixtures.py`).
 - Everything offline: no network calls while processing a PDF or DWG.
 

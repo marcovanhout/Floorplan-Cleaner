@@ -41,7 +41,7 @@ def test_save_room_crops_applies_margin_and_clips_to_bounds(tmp_path):
 
 def test_estimate_door_area_threshold_finds_gap_between_door_and_room_cluster():
     # 44 deur-vakjes (33489-46872) vs 17 echte ruimtes (126994+) - zelfde
-    # verhouding als het echte testbestand (testtekening) waarop de simpele
+    # verhouding als een echte testtekening waarop de simpele
     # mediaan-aanpak faalde, omdat er dan meer deur- dan kamer-vakjes zijn.
     door_areas = [33489, 33672, 33672, 39204, 39402, 39402, 39600, 39601, 46440, 46872] * 4
     door_areas = door_areas[:44]
