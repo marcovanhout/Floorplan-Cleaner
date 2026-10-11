@@ -5,13 +5,22 @@ import json
 import math
 import os
 import shutil
+import sys
+from pathlib import Path
 
 import pymupdf as fitz
 from flask import Blueprint, abort, jsonify, render_template, request, send_file
 from PIL import Image
+from werkzeug.exceptions import HTTPException
 
-from src.core.constants import DEFAULT_DROP_KEYWORDS, DEFAULT_KEEP_KEYWORDS
-from src.core.layers import apply_explicit_layer_selection, list_layers, recommend_layers
+from src.core.constants import DEFAULT_DROP_KEYWORDS, DEFAULT_KEEP_KEYWORDS, DWG_FALLBACK_DROP_KEYWORDS
+from src.core.dwg import DwgConversionError, convert_dwg_to_pdf, is_dwg_available, sniff_kind
+from src.core.layers import (
+    apply_explicit_layer_selection,
+    layers_without_keywords,
+    list_layers,
+    recommend_layers,
+)
 from src.core.pipeline import (
     erase_rect,
     export_rooms,
@@ -51,11 +60,33 @@ def _room_from_dict(d: dict) -> RoomRecord:
     )
 
 
+@bp.app_errorhandler(HTTPException)
+def http_error_as_text(e: HTTPException):
+    # De frontend toont de response-tekst letterlijk; zonder dit is dat een
+    # complete HTML-foutpagina.
+    return e.description or e.name, e.code, {"Content-Type": "text/plain; charset=utf-8"}
+
+
+def _license_files() -> list[Path]:
+    if getattr(sys, "frozen", False):
+        base = Path(sys._MEIPASS) / "licenses"  # type: ignore[attr-defined]
+        return [base / "THIRD_PARTY_NOTICES.md", base / "LibreDWG-COPYING.txt"]
+    root = Path(__file__).resolve().parents[2]
+    return [root / "THIRD_PARTY_NOTICES.md", root / "vendor" / "libredwg" / "LibreDWG-COPYING.txt"]
+
+
+@bp.route("/licenses")
+def licenses():
+    text = "\n\n".join(p.read_text(encoding="utf-8") for p in _license_files() if p.is_file())
+    return text, 200, {"Content-Type": "text/plain; charset=utf-8"}
+
+
 @bp.route("/")
 def index():
     return render_template(
         "index.html",
         tesseract_available=is_tesseract_available(),
+        dwg_available=is_dwg_available(),
     )
 
 
@@ -68,18 +99,43 @@ def upload():
     startpunt (zie recommended), nooit de enige waarheid."""
     file = request.files.get("pdf")
     if not file or not file.filename:
-        abort(400, "No PDF selected.")
+        abort(400, "No file selected.")
 
-    job = create_job(file.read(), file.filename)
-    doc = fitz.open(job.pdf_path)
+    data = file.read()
+    kind = sniff_kind(data)
+    if kind is None:
+        abort(415, "This file is not a PDF or DWG drawing.")
+    if kind == "dwg" and not is_dwg_available():
+        abort(422, "DWG support is not available in this installation; export the drawing to PDF instead.")
+
+    job = create_job(data, file.filename, kind)
+    warnings: list[str] = []
+    if kind == "dwg":
+        try:
+            warnings = convert_dwg_to_pdf(job.tmp_dir / "input.dwg", job.pdf_path).warnings
+        except DwgConversionError as e:
+            cleanup_job(job.job_id)
+            abort(422, str(e))
+
+    try:
+        doc = fitz.open(job.pdf_path)
+    except (fitz.FileDataError, RuntimeError):
+        cleanup_job(job.job_id)
+        abort(422, "This PDF could not be opened; it may be damaged.")
 
     layers = list_layers(doc)
     recommended = recommend_layers(doc, DEFAULT_KEEP_KEYWORDS, DEFAULT_DROP_KEYWORDS)
+    if kind == "dwg" and not recommended:
+        # Bv. lagen genoemd naar pendikte: zonder voorstel zou de lagenkiezer
+        # leeg beginnen - dan liever alles behalve duidelijke tekst/maat/arcering.
+        recommended = layers_without_keywords(doc, DWG_FALLBACK_DROP_KEYWORDS)
 
     return jsonify({
         "job_id": job.job_id,
+        "source_type": kind,
         "layers": [layer["name"] for layer in layers],
         "recommended_layers": sorted(recommended),
+        "warnings": warnings,
     })
 
 

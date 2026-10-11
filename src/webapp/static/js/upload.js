@@ -13,6 +13,8 @@
   const tesseractAvailable = forceRasterEl.dataset.tesseractAvailable === "true";
 
   const layersLoadingEl = document.getElementById("layers-loading");
+  const uploadWarningsEl = document.getElementById("upload-warnings");
+  let uploadSeq = 0;
   const layersSectionEl = document.getElementById("layers-section");
   const layersListEl = document.getElementById("layers-list");
   const selectAllLink = document.getElementById("layers-select-all");
@@ -191,6 +193,7 @@
   previewBoxEl.addEventListener("dblclick", fitPreviewTransform);
 
   async function inspectSelectedFile() {
+    const seq = ++uploadSeq; // antwoord van een eerder gekozen bestand negeren
     currentJobId = null;
     previewRequestSeq++; // eventuele nog lopende preview-aanvraag van een vorig bestand negeren
     previewNaturalSize = null; // dwingt fitPreviewTransform() af bij het eerste voorbeeld van dit bestand
@@ -200,22 +203,37 @@
     previewImgEl.hidden = true;
     previewPlaceholderEl.hidden = false;
     status.hidden = true;
+    uploadWarningsEl.hidden = true;
 
     const file = pdfInput.files[0];
     pdfFilenameEl.textContent = file ? file.name : "No file chosen";
     if (!file) return;
 
+    // Een grote DWG omzetten kan een halve minuut duren - een oplopende
+    // teller laat zien dat de tool nog bezig is.
+    const label = file.name.toLowerCase().endsWith(".dwg") ? "Converting DWG..." : "Reading file...";
+    const startTime = Date.now();
+    layersLoadingEl.textContent = label;
     layersLoadingEl.hidden = false;
+    const timer = setInterval(() => {
+      layersLoadingEl.textContent = `${label} (${formatElapsed(Math.round((Date.now() - startTime) / 1000))})`;
+    }, 1000);
     try {
       const body = new FormData();
       body.append("pdf", file);
       const resp = await fetch("/upload", { method: "POST", body });
+      if (seq !== uploadSeq) return;
       if (!resp.ok) {
         const text = await resp.text();
         throw new Error(text || `Server error (${resp.status})`);
       }
       const data = await resp.json();
+      if (seq !== uploadSeq) return;
       currentJobId = data.job_id;
+      if (data.warnings && data.warnings.length > 0) {
+        uploadWarningsEl.textContent = data.warnings.join(" ");
+        uploadWarningsEl.hidden = false;
+      }
       if (data.layers && data.layers.length > 0) {
         renderLayerCheckboxes(data.layers, data.recommended_layers);
         layersSectionEl.hidden = false;
@@ -223,11 +241,13 @@
       }
       submitBtn.disabled = false;
     } catch (err) {
+      if (seq !== uploadSeq) return;
       status.hidden = false;
       status.classList.add("error");
       status.textContent = "Failed to read the file: " + err.message;
     } finally {
-      layersLoadingEl.hidden = true;
+      clearInterval(timer);
+      if (seq === uploadSeq) layersLoadingEl.hidden = true;
     }
   }
 

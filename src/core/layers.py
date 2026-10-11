@@ -48,6 +48,17 @@ def recommend_layers(doc, keep_keywords: list[str], drop_keywords: list[str]) ->
     return recommended
 
 
+def layers_without_keywords(doc, drop_keywords: list[str]) -> set[str]:
+    """Alle laagnamen behalve die op een drop-keyword lijken."""
+    ui_names = {u["text"] for u in doc.layer_ui_configs()}
+    return {
+        info["name"]
+        for info in doc.get_ocgs().values()
+        if info["name"] in ui_names
+        and not any(k.lower() in info["name"].lower() for k in drop_keywords)
+    }
+
+
 def apply_explicit_layer_selection(
     doc, selected_layers: list[str]
 ) -> tuple[list[str], list[str]]:

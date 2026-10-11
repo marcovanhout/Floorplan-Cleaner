@@ -19,6 +19,13 @@ DEFAULT_DROP_KEYWORDS = [
     "AREA", "ANNO", "GRID", "TOPO", "DETL", "RHK", "GRADE", "FILL & SIGN",
 ]
 
+# Alleen voor een omgezette DWG waarvan GEEN laag op de keep-keywords lijkt
+# (bv. lagen genoemd naar pendikte, "025DDUN"): dan alles voorstellen behalve
+# lagen die duidelijk tekst/maatvoering/arcering/hulplijnen zijn.
+DWG_FALLBACK_DROP_KEYWORDS = DEFAULT_DROP_KEYWORDS + [
+    "TEKST", "TEXT", "DIM", "MAAT", "HATCH", "ARCER", "DEFPOINTS", "STRAMIEN",
+]
+
 # Patronen die duiden op een "code" (geen bruikbare ruimtenaam):
 # ZHD-achtige ruimtecodes, wandtype/deur/raam-codes, m²-waarden, cijfers.
 CODE_PATTERNS = [

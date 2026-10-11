@@ -32,11 +32,13 @@ class JobState:
 JOBS: dict[str, JobState] = {}
 
 
-def create_job(pdf_bytes: bytes, original_name: str) -> JobState:
+def create_job(data: bytes, original_name: str, kind: str = "pdf") -> JobState:
+    """kind="dwg": het origineel komt in input.dwg; input.pdf (pdf_path)
+    ontstaat pas na omzetting en wordt daarna net als een geüploade PDF gebruikt."""
     tmp_dir = Path(tempfile.mkdtemp(prefix="floorplan_"))
     job_id = uuid.uuid4().hex
     pdf_path = tmp_dir / "input.pdf"
-    pdf_path.write_bytes(pdf_bytes)
+    (tmp_dir / f"input.{kind}").write_bytes(data)
     job = JobState(job_id=job_id, tmp_dir=tmp_dir, pdf_path=pdf_path, pdf_original_name=original_name)
     JOBS[job_id] = job
     return job

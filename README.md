@@ -1,6 +1,6 @@
 # Floorplan cleaner
 
-Turns an (AutoCAD-exported) PDF floorplan into a clean PNG (only
+Turns a floorplan — an (AutoCAD-exported) PDF or a DWG file — into a clean PNG (only
 walls/doors/windows/stairs, pure black lines, transparent background) and
 optionally separate PNGs per room. Runs entirely locally/offline as a Windows
 desktop app — no drawing data leaves the PC. See [PROJECT_SPEC.md](PROJECT_SPEC.md)
@@ -27,18 +27,27 @@ yourself in the correction step. Install it via the
 When Tesseract is installed, the upload page shows a checkbox to turn
 automatic text removal off (e.g. for faster processing).
 
+**DWG files** can be uploaded directly. The app converts them to a PDF with
+their CAD layers (using the bundled [LibreDWG](https://www.gnu.org/software/libredwg/)),
+after which everything works as for a PDF. A large drawing can take up to
+half a minute to convert. Drawings that refer to other drawing files
+(external references) miss those parts — upload a drawing with the references
+bound, or export it to PDF instead.
+
 ## Development
 
 ```bash
 python -m venv .venv
 .venv\Scripts\pip install -r requirements-dev.txt
+.venv\Scripts\python scriptsetch_libredwg.py   # LibreDWG for DWG support (not committed)
 .venv\Scripts\python -m src.launcher        # run the webapp locally
 .venv\Scripts\pytest tests/                 # test suite
 ```
 
 Reusable processing logic lives in `src/core/` (independent of Flask/CLI), the
 webapp in `src/webapp/`, and the thin CLI wrapper in `src/cli.py`
-(`python -m src.cli input.pdf output.png --rooms`).
+(`python -m src.cli input.pdf output.png --rooms`; a `.dwg` works too).
+DWG conversion lives in `src/core/dwg.py` and `src/core/dwg_pdf_backend.py`.
 
 ## Building the .exe yourself
 
@@ -46,7 +55,8 @@ webapp in `src/webapp/`, and the thin CLI wrapper in `src/cli.py`
 .venv\Scripts\pyinstaller packaging\floorplan_cleaner.spec --noconfirm
 ```
 
-Result: `packaging\dist\FloorplanCleaner.exe`. See
+Requires `scriptsetch_libredwg.py` to have run first (the build stops if
+LibreDWG is missing). Result: `packaging\dist\FloorplanCleaner.exe`. See
 `.github\workflows\build-exe.yml` for the automated build on a
 GitHub release.
 
@@ -55,8 +65,10 @@ GitHub release.
 - **Never commit real customer drawings to this repo** — even though the repo
   is private. Test files in `tests/fixtures/` are exclusively synthetic
   (see `tests/fixtures/generate_fixtures.py`).
-- Everything offline: no network calls while processing a PDF.
+- Everything offline: no network calls while processing a PDF or DWG.
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE). The .exe also bundles third-party components under their own
+licenses, including LibreDWG (GPL-3.0-or-later) — see
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and the *Licenses* link in the app.

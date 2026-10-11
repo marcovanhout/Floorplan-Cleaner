@@ -35,7 +35,17 @@ body {
   box-shadow: var(--shadow-sm);
   position: relative;
   z-index: 30;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
 }
+
+.topbar-link {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-decoration: none;
+}
+.topbar-link:hover { text-decoration: underline; }
 
 .topbar h1 {
   margin: 0;

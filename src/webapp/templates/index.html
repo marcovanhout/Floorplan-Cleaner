@@ -3,13 +3,21 @@
 <form id="upload-form" class="upload-form">
   <div class="form-narrow">
     <div class="field">
-      <label for="pdf">Floorplan PDF</label>
+      <label for="pdf">{{ "Floorplan (PDF or DWG)" if dwg_available else "Floorplan PDF" }}</label>
       <div class="file-picker">
         <button type="button" id="pdf-choose-btn" class="primary">Choose file</button>
         <span id="pdf-filename" class="file-picker-name">No file chosen</span>
-        <input type="file" id="pdf" name="pdf" accept="application/pdf" required class="file-picker-input">
+        <input type="file" id="pdf" name="pdf" accept="{{ '.pdf,.dwg,application/pdf' if dwg_available else 'application/pdf' }}" required class="file-picker-input">
       </div>
     </div>
+    {% if dwg_available %}
+    <p class="hint">
+      A DWG is first converted to a PDF with its CAD layers, which can take up to
+      half a minute for a large drawing. If the drawing refers to other drawing
+      files (external references), those parts will be missing — upload a
+      drawing with the references bound, or export it to PDF instead.
+    </p>
+    {% endif %}
 
     <div class="field-row">
       <div class="field">
@@ -23,7 +31,7 @@
     </div>
     <p class="hint">
       Page: which page of the PDF to process (for most drawings that's just page 0,
-      the first one). Render resolution: how sharp the drawing is converted —
+      the first one; a DWG always has one page). Render resolution: how sharp the drawing is converted —
       4 is a good default, only increase it for a very large or highly
       detailed drawing.
     </p>
@@ -61,12 +69,13 @@
     {% endif %}
 
     <p id="layers-loading" class="status" hidden>Reading file...</p>
+    <p id="upload-warnings" class="hint hint-warning" hidden></p>
   </div>
 
   <div id="layers-section" class="field" hidden>
     <label>Layers</label>
     <p class="hint">
-      These are the CAD layers found in your PDF. We've already checked a few
+      These are the CAD layers found in your drawing. We've already checked a few
       based on the layer name (walls/doors/windows etc.) — double-check that's
       right and check anything we missed yourself. Every drafter names layers
       differently, so treat this as a suggestion, not a guarantee.

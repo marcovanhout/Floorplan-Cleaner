@@ -317,6 +317,38 @@ zichtbaar, een op keywoorden gebaseerd voorstel vooraf aangevinkt, en een
 live, zoombaar/panbaar voorbeeld) — preciezer dan een keyword-lijst en
 zonder dat de gebruiker technische zoektermen hoeft te begrijpen.
 
+### 3.5 DWG-import
+
+Collega's krijgen tekeningen vaak als DWG en hebben geen AutoCAD (DWGSee
+exporteert alleen in de proefperiode naar PDF; ODA File Converter mag
+zakelijk niet gratis; QCAD viel af). Daarom kan het uploadvak nu ook een DWG
+aannemen, die de tool zelf omzet naar een PDF met lagen; daarna loopt alles
+precies zoals bij een geüploade PDF (lagenkiezer, MODE A, ruimtenamen).
+
+- **Lezen:** LibreDWG 0.14 (`dwg2dxf.exe` + `libredwg-0.dll`, GPL-3) zet de
+  DWG om naar DXF. Wordt meegeleverd in de .exe maar nooit gecommit:
+  `scripts/fetch_libredwg.py` haalt de vastgepinde versie op en controleert
+  de SHA-256 (CI én ontwikkelaars). Licentie + broncode gaan als bijlage mee
+  met elke release (`THIRD_PARTY_NOTICES.md`, *Licenses*-pagina in de app).
+- **Tekenen:** ezdxf (vastgepind op 1.4.4) met een eigen, snelle PDF-uitvoer
+  (`src/core/dwg_pdf_backend.py`): één PDF-laag per CAD-laag (originele
+  namen), witte achtergrond zodat AutoCAD-kleur 7 zwart wordt. ezdxf's eigen
+  PDF-uitvoer bleek kwadratisch traag (11 min voor een grote tekening); de
+  eigen versie doet dezelfde tekening in ~17 s.
+- **Ruimtenamen:** tekst staat in de omgezette PDF als getekende vormen;
+  daarom wordt dezelfde tekst ook als onzichtbare echte tekst (buiten alle
+  lagen) op dezelfde plek gezet, zodat de bestaande naamherkenning werkt.
+- **Pagina:** tekening op ~1:100, begrensd tussen A3 en A0, met een ruime
+  witrand (de ruimtedetectie ziet het grootste witte vlak als buitenwereld).
+  Losse objecten ver van de plattegrond worden buiten beeld gelaten.
+- **Robuustheid:** bekende eigenaardigheden in LibreDWG's uitvoer worden
+  vooraf hersteld; een object dat niet getekend kan worden, wordt
+  overgeslagen i.p.v. de hele omzetting af te breken. Ontbrekende gekoppelde
+  tekeningen (xrefs) geven een waarschuwing met de bestandsnamen.
+- **Laagvoorstel:** lijkt geen enkele laagnaam op een muur/deur-keyword (bv.
+  lagen genoemd naar pendikte, "025DDUN"), dan worden bij een DWG alle lagen
+  voorgesteld behalve duidelijke tekst/maatvoering/arcering/stramien.
+
 ---
 
 ## 4. Open technisch spoor: betere automatische ruimtedetectie

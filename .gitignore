@@ -4,6 +4,9 @@
 # Throwaway spike output (may contain renders of real customer PDFs)
 /scripts/spikes/_out/
 
+# Third-party binaries (LibreDWG), fetched by scripts/fetch_libredwg.py
+/vendor/
+
 # Python
 __pycache__/
 *.pyc

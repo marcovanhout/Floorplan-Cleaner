@@ -64,7 +64,50 @@ def make_simple_floorplan(path: str) -> None:
     doc2.close()
 
 
+def make_simple_floorplan_dwg(path: str) -> None:
+    """Synthetische DWG (R2000, mm): twee ruimtes naast elkaar. Ruimte 1 heeft
+    een gewone TEXT-code/naam, ruimte 2 een blok met ATTRIB's (zoals een
+    ruimte-label in echte tekeningen). Via ezdxf als DXF geschreven en met
+    LibreDWG's dxf2dwg.exe (uit vendor/, zie scripts/fetch_libredwg.py) omgezet."""
+    import subprocess
+    import tempfile
+    from pathlib import Path
+
+    import ezdxf
+
+    dxf2dwg = Path(__file__).resolve().parents[2] / "vendor" / "libredwg" / "dxf2dwg.exe"
+    doc = ezdxf.new("R2000", units=4)  # 4 = mm
+    for name, color in (("A-WALL", 7), ("A-DOOR", 5), ("A-ANNO-TEXT", 3), ("AREA-FILL", 1)):
+        doc.layers.add(name, color=color)
+    msp = doc.modelspace()
+
+    # Twee ruimtes van 6 x 5 m met een gedeelde tussenwand.
+    for pts in ([(0, 0), (12000, 0), (12000, 5000), (0, 5000)], [(6000, 0), (6000, 5000)]):
+        msp.add_lwpolyline(pts, close=len(pts) > 2, dxfattribs={"layer": "A-WALL", "const_width": 200})
+    msp.add_arc((2000, 0), radius=900, start_angle=0, end_angle=90, dxfattribs={"layer": "A-DOOR"})
+
+    hatch = msp.add_hatch(color=1, dxfattribs={"layer": "AREA-FILL"})
+    hatch.paths.add_polyline_path([(200, 200), (5800, 200), (5800, 4800), (200, 4800)], is_closed=True)
+
+    msp.add_text("TL-1.01", height=250, dxfattribs={"layer": "A-ANNO-TEXT", "insert": (2500, 2800)})
+    msp.add_text("Toilet", height=250, dxfattribs={"layer": "A-ANNO-TEXT", "insert": (2500, 2300)})
+
+    tag = doc.blocks.new("ROOMTAG")
+    tag.add_attdef("CODE", insert=(0, 250), height=250, dxfattribs={"layer": "A-ANNO-TEXT"})
+    tag.add_attdef("NAME", insert=(0, -250), height=250, dxfattribs={"layer": "A-ANNO-TEXT"})
+    msp.add_blockref("ROOMTAG", (8500, 2500), dxfattribs={"layer": "A-ANNO-TEXT"}).add_auto_attribs(
+        {"CODE": "TL-1.02", "NAME": "Berging"}
+    )
+
+    with tempfile.TemporaryDirectory() as tmp:
+        dxf = Path(tmp) / "simple_floorplan.dxf"
+        doc.saveas(dxf)
+        subprocess.run([str(dxf2dwg), "-y", "-o", str(Path(path).resolve()), str(dxf)], check=True,
+                       capture_output=True)
+
+
 if __name__ == "__main__":
     out_dir = os.path.dirname(__file__)
     make_simple_floorplan(os.path.join(out_dir, "simple_floorplan.pdf"))
+    make_simple_floorplan_dwg(os.path.join(out_dir, "simple_floorplan.dwg"))
     print("Fixture(s) gegenereerd in", out_dir)

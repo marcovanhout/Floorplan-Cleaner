@@ -23,6 +23,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
 
+      - name: Fetch LibreDWG (pinned, checksum-verified)
+        run: python scripts/fetch_libredwg.py
+
+      - name: Run tests
+        run: pytest tests -q
+
       - name: Build exe
         run: |
           pyinstaller packaging/floorplan_cleaner.spec --noconfirm --distpath packaging/dist --workpath packaging/build
@@ -38,25 +44,40 @@ jobs:
           # koude start van een ~80MB onefile-exe (uitpakken + numpy/scipy
           # laden) kan op een CI-runner meer dan de eerdere 35s duren.
           Start-Process -FilePath "packaging\dist\FloorplanCleaner.exe"
-          $listening = $false
+          $port = $null
           $deadline = (Get-Date).AddSeconds(90)
           while ((Get-Date) -lt $deadline) {
             $procs = Get-Process -Name "FloorplanCleaner" -ErrorAction SilentlyContinue
             foreach ($p in $procs) {
-              if (Get-NetTCPConnection -State Listen -OwningProcess $p.Id -ErrorAction SilentlyContinue) {
-                $listening = $true
+              $conn = Get-NetTCPConnection -State Listen -OwningProcess $p.Id -ErrorAction SilentlyContinue | Select-Object -First 1
+              if ($conn) {
+                $port = $conn.LocalPort
                 break
               }
             }
-            if ($listening) { break }
+            if ($port) { break }
             Start-Sleep -Seconds 3
           }
-          Get-Process -Name "FloorplanCleaner" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-          if (-not $listening) {
+          if (-not $port) {
+            Get-Process -Name "FloorplanCleaner" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
             Write-Error "De .exe kwam niet met een luisterende poort binnen de tijd - build afgekeurd."
             exit 1
           }
-          Write-Host "OK: exe start en luistert op een poort."
+          Write-Host "OK: exe start en luistert op poort $port."
+
+          # DWG-route in de gebouwde exe: meegeleverde dwg2dxf + ezdxf moeten werken.
+          try {
+            $resp = Invoke-WebRequest -Uri "http://127.0.0.1:$port/upload" -Method Post `
+              -Form @{ pdf = Get-Item "tests\fixtures\simple_floorplan.dwg" } -TimeoutSec 120
+            $data = $resp.Content | ConvertFrom-Json
+          } finally {
+            Get-Process -Name "FloorplanCleaner" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          }
+          if ($data.source_type -ne "dwg" -or $data.layers.Count -lt 1) {
+            Write-Error "DWG-upload in de exe gaf geen lagen terug - build afgekeurd."
+            exit 1
+          }
+          Write-Host "OK: DWG-upload werkt in de exe ($($data.layers.Count) lagen)."
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
@@ -64,8 +85,14 @@ jobs:
           name: FloorplanCleaner-windows
           path: packaging/dist/FloorplanCleaner.exe
 
+      # GPL-3: bij de meegeleverde LibreDWG-programma's horen de licentie en
+      # de bijbehorende broncode, daarom die als extra bijlagen bij de release.
       - name: Attach exe to release
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
-          files: packaging/dist/FloorplanCleaner.exe
+          files: |
+            packaging/dist/FloorplanCleaner.exe
+            THIRD_PARTY_NOTICES.md
+            vendor/libredwg/LibreDWG-COPYING.txt
+            vendor/libredwg/libredwg-0.14.tar.xz

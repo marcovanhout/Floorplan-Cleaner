@@ -18,9 +18,17 @@ Bekende valkuilen die deze spec afdekt (zie het implementatieplan):
 
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_all, collect_submodules
+from PyInstaller.utils.hooks import collect_all, collect_data_files, collect_submodules
 
 PROJECT_ROOT = Path(SPECPATH).resolve().parent  # noqa: F821 (SPECPATH: PyInstaller-global)
+
+# LibreDWG (DWG-ondersteuning) wordt niet gecommit maar opgehaald door
+# scripts/fetch_libredwg.py. Zonder die map zou de .exe stilletjes geen DWG
+# meer kunnen lezen - dan liever een mislukte build.
+LIBREDWG_DIR = PROJECT_ROOT / "vendor" / "libredwg"
+for required in ("dwg2dxf.exe", "libredwg-0.dll", "LibreDWG-COPYING.txt"):
+    if not (LIBREDWG_DIR / required).is_file():
+        raise SystemExit(f"{LIBREDWG_DIR / required} missing - run: python scripts/fetch_libredwg.py")
 
 pymupdf_datas, pymupdf_binaries, pymupdf_hidden = collect_all("pymupdf")
 # scipy's OWN test suites (scipy.*.tests.*) komen mee via collect_submodules
@@ -33,12 +41,23 @@ datas = [
     (str(PROJECT_ROOT / "src" / "webapp" / "static"), "src/webapp/static"),
     (str(PROJECT_ROOT / "VERSION"), "."),
     *pymupdf_datas,
+    # Als datas (niet binaries): zo blijven exe + dll samen in één map, waar
+    # src/core/dwg.py ze zoekt, i.p.v. door PyInstaller verspreid te worden.
+    (str(LIBREDWG_DIR / "dwg2dxf.exe"), "libredwg"),
+    (str(LIBREDWG_DIR / "libredwg-0.dll"), "libredwg"),
+    (str(PROJECT_ROOT / "THIRD_PARTY_NOTICES.md"), "licenses"),
+    (str(LIBREDWG_DIR / "LibreDWG-COPYING.txt"), "licenses"),
+    # ezdxf: lettertype-/lijnstijl-resources.
+    *collect_data_files("ezdxf"),
 ]
 
 hiddenimports = [
     *pymupdf_hidden,
     *scipy_hidden,
     "waitress",
+    # ezdxf laadt zijn versnelde (C-)modules en fontTools-tabellen dynamisch.
+    *collect_submodules("ezdxf.acc"),
+    *collect_submodules("fontTools.ttLib.tables"),
 ]
 
 a = Analysis(  # noqa: F821

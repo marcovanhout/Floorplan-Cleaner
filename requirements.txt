@@ -5,3 +5,4 @@ scipy
 pytesseract
 flask
 waitress
+ezdxf==1.4.4
