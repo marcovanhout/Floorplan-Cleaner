@@ -70,12 +70,13 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
   vertical-align: bottom;
-  margin-left: 6px;
-  font-size: 14px;
+  margin-left: 14px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--text);
   letter-spacing: 0;
 }
+.app-file-label { font-weight: 400; color: var(--text-muted); }
 
 main {
   max-width: 1200px;
