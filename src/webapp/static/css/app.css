@@ -60,6 +60,22 @@ body {
   color: var(--text-muted);
   letter-spacing: 0;
 }
+/* Naam van de geüploade tekening (alleen in het correctiescherm), zodat
+   je ziet met welke plattegrond je bezig bent. Een heel lange naam wordt
+   afgekapt met "..." (volledige naam staat in de tooltip). */
+.app-file {
+  display: inline-block;
+  max-width: 60vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+  margin-left: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  letter-spacing: 0;
+}
 
 main {
   max-width: 1200px;

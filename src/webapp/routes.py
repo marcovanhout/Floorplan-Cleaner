@@ -210,7 +210,7 @@ def correct(job_id):
     job = get_job(job_id)
     if job is None:
         abort(404, "Unknown or expired job.")
-    return render_template("correct.html", job_id=job_id)
+    return render_template("correct.html", job_id=job_id, file_name=job.pdf_original_name)
 
 
 @bp.route("/jobs/<job_id>/detect")
