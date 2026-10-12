@@ -184,13 +184,26 @@ gebruiken.
 stukje (bv. tekst die de automatische opschoning liet staan) handmatig
 permanent weg te vlakken - er was voorheen geen manier om de
 onderliggende afbeelding zelf te corrigeren, alleen de ruimte-vakken
-erover. Daarnaast een "Undo"-knop die de allerlaatste wijziging
-terugdraait (bewust maar 1 stap diep, geen verdere geschiedenis of
-redo - dekt de praktische "oeps"-situatie zonder de complexiteit van een
-volledige undo/redo-geschiedenis); bij ruimte-vak-wijzigingen gebeurt dit
-direct client-side, bij roteren/gummen (die de afbeelding zelf aanpassen)
-via een korte serverronde, met behoud van het huidige zoomniveau tenzij
-de afbeeldingsafmetingen ook echt veranderd zijn.
+erover. Daarnaast "Undo" en "Redo" (ook via Ctrl+Z en Ctrl+Y /
+Ctrl+Shift+Z): één gezamenlijke rij van maximaal 20 stappen voor alle
+wijzigingen (vakjes, gummen, draaien). Vakjes-wijzigingen leven
+client-side; de afbeeldingsstappen houdt de server zuinig bij
+(`src/webapp/history.py`): bij gummen alleen het gewiste stukje, bij een
+90-graden-draai niets (exact terug te draaien), bij een vrije hoek een
+PNG-kopie. Gummen zelf wordt in de browser meteen op het scherm getoond
+i.p.v. de hele afbeelding opnieuw op te halen, en undo van een veeg haalt
+alleen dat stukje terug - bij een grote tekening het verschil tussen
+enkele seconden en vrijwel direct. (Eerder was undo bewust 1 stap diep,
+met een volledige kopie van de afbeelding in de browser; dat schaalde
+niet naar meer stappen bij tekeningen van 100+ megapixel.)
+
+Acties die op de server even duren (scherm openen, draaien, undo/redo
+van een draai, exporteren) tonen een draaiend rondje met een oplopende
+teller rechtsboven in het tekenvlak en zetten zolang het correctiescherm
+op slot (knoppen, canvas-invoer, sneltoetsen) - zonder die melding leek
+er niets te gebeuren en zette een extra klik op Rotate een tweede draai
+in de wachtrij. De naam van de geüploade tekening staat in de kop
+("File: …") en in de titel van het browsertabblad.
 
 Ook is een bug in de opschoning van platte/gescande PDF's (MODE B)
 gevonden en verholpen: dunne lijnen (zoals een deurzwaai) die over een
@@ -223,6 +236,17 @@ die niet bij zijn (meestal witte) omgeving hoort. Zie de toelichting in
 `src/core/raster.py` (`_colored_mask`) voor de volledige onderbouwing,
 inclusief twee vervolgfixes op ditzelfde probleem (kruispunten in een
 dichte kruisarcering, en het anti-aliasing-randje van een arceringslijn).
+
+**Snelheid MODE B.** De kleurvlak-stap rekende elk pixel van het blad
+uitgebreid door, terwijl alleen pixels met een eigen kleur (en hun directe
+buren) ertoe doen; nu alleen daar, met exact dezelfde berekening per
+pixel, en zonder volledige float-kopieën van het blad (scheelt ook veel
+geheugen). Uitkomst pixel-identiek op alle test-PDF's; een A0-blad zonder
+lagen: opschonen ~2x zo snel (kleurvlak-stap 53 s -> 12 s). De vier
+OCR-passes (0/90/180/270 graden) tegelijk draaien is geprobeerd en
+afgewezen: elke pas ziet dan ook de tekst die een eerdere pas al had
+weggehaald, wat de gevonden ruimtes merkbaar veranderde - en door
+concurrentie om de CPU was het niet eens sneller.
 
 **Bekende, geaccepteerde beperking hierbij:** voor dit soort platte
 classificatieschema's (geen echte plattegrond, dus zonder betekenisvolle
