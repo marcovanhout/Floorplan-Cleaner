@@ -83,31 +83,46 @@ def _unrotate_box(
     return orig_w - y1, x0, orig_w - y0, x1  # k == 3, ROTATE_90 (90 graden CCW)
 
 
-def _saturation(rgb: np.ndarray) -> np.ndarray:
-    """HSV-verzadiging van een (H, W, 3) float-array in [0, 1], zonder matplotlib.
+def _as_float(values: np.ndarray) -> np.ndarray:
+    """uint8 (0-255) -> float32 in [0, 1], precies zoals clean_via_raster dat
+    vroeger voor het hele blad in één keer deed; een float-array blijft zoals
+    hij is. Zo kan er met de compacte uint8-pixels gewerkt worden en alleen
+    waar nodig naar float worden omgezet - een volledige float-kopie van een
+    groot blad (100+ MP) is al gauw 1,5 GB en traag om doorheen te rekenen."""
+    if values.dtype == np.uint8:
+        return values.astype(np.float32) / 255.0
+    return values
+
+
+def _saturation(cmax: np.ndarray, cmin: np.ndarray) -> np.ndarray:
+    """HSV-verzadiging uit de per-pixel max/min over de kleurkanalen (float in
+    [0, 1]), zonder matplotlib.
 
     S = (max - min) / max, 0 waar max == 0 (zuiver zwart telt niet als 'gekleurd').
     """
-    cmax = rgb.max(axis=2)
-    cmin = rgb.min(axis=2)
     sat = np.zeros_like(cmax)
-    nonzero = cmax > 0
-    sat[nonzero] = (cmax[nonzero] - cmin[nonzero]) / cmax[nonzero]
+    np.divide(cmax - cmin, cmax, out=sat, where=cmax > 0)
     return sat
 
 
-def _local_median_color(rgb: np.ndarray, local_window: int, downsample: int) -> np.ndarray:
-    """Schat de "echte" vlakkleur ter plekke van elke pixel: de mediaankleur
-    (per kanaal apart) in een klein venster eromheen - ongevoelig voor een
-    dunne lijn erdoorheen, die binnen zo'n venster altijd in de minderheid
-    is. Zie _colored_mask voor waarom dit nodig is en waarom uitgedund wordt
-    vóór het filter (snelheid op een groot blad)."""
+def _local_median_small(rgb: np.ndarray, local_window: int, downsample: int) -> np.ndarray:
+    """Schat de "echte" vlakkleur ter plekke: de mediaankleur (per kanaal
+    apart) in een klein venster - ongevoelig voor een dunne lijn erdoorheen,
+    die binnen zo'n venster altijd in de minderheid is. Zie _colored_mask voor
+    waarom dit nodig is en waarom uitgedund wordt vóór het filter (snelheid op
+    een groot blad).
+
+    Geeft de UITGEDUNDE uitkomst terug: de schatting voor pixel (y, x) is
+    element [y // downsample, x // downsample]. Terugschalen naar volle
+    grootte is niet nodig - die waarde wordt alleen opgezocht voor de paar
+    pixels waar hij ertoe doet."""
+    # Op de compacte uint8-waarden filteren en pas daarna omzetten: een
+    # mediaan kiest altijd een van de bestaande waarden, en de omzetting naar
+    # float behoudt de volgorde - dus exact dezelfde uitkomst, maar sneller.
     small = rgb[::downsample, ::downsample, :]
-    median_small = np.stack(
-        [ndimage.median_filter(small[..., c], size=local_window) for c in range(3)], axis=-1
+    return _as_float(
+        np.stack([ndimage.median_filter(small[..., c], size=local_window) for c in range(3)], axis=-1)
     )
-    median = np.repeat(np.repeat(median_small, downsample, axis=0), downsample, axis=1)
-    return median[: rgb.shape[0], : rgb.shape[1], :]
 
 
 def _hue_matches(rgb: np.ndarray, reference_rgb: np.ndarray, neutral_floor: float = 0.02) -> np.ndarray:
@@ -239,13 +254,41 @@ def _colored_mask(
     Geverifieerd op zowel het arcering-bestand (spookbeeld praktisch weg)
     als de deur-over-kleurvlak-testgevallen (pixel-identiek aan zonder
     uitdijing).
+
+    Snelheid: alleen pixels met een duidelijke eigen kleur (verzadiging boven
+    `sat_threshold`) kunnen als vlakkleur weg, en `is_line_like` doet er
+    alleen toe op die pixels en binnen `fringe_dilate_px` ervan (verder reikt
+    de uitdijing niet). Op een plattegrond is dat een klein deel van het blad
+    (de rest is wit papier of zwarte lijn) - de dure vergelijkingen met de
+    lokale vlakkleur worden daarom alleen voor die pixels uitgerekend, met
+    exact dezelfde berekening per pixel als voor het hele blad (op een A0-blad
+    van 128 MP was dit ~56 s, vooral aan pixels waar het niets uitmaakte).
+
+    `rgb`: (H, W, 3) uint8, of float in [0, 1].
     """
-    local_median = _local_median_color(rgb, local_window, downsample)
-    cmax = rgb.max(axis=2)
-    local_median_cmax = local_median.max(axis=2)
-    is_darker = (local_median_cmax - cmax) > local_delta
-    is_line_like = is_darker & _hue_matches(rgb, local_median)
-    colored = (_saturation(rgb) > sat_threshold) & ~is_line_like
+    # Per kanaal i.p.v. rgb.max(axis=2): numpy is traag in het reduceren
+    # over zo'n korte laatste as van 3 - zelfde uitkomst, een paar keer sneller.
+    r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
+    cmax = _as_float(np.maximum(np.maximum(r, g), b))
+    cmin = _as_float(np.minimum(np.minimum(r, g), b))
+    saturated = _saturation(cmax, cmin) > sat_threshold
+    if not saturated.any():
+        return saturated
+
+    relevant = (
+        ndimage.binary_dilation(saturated, iterations=fringe_dilate_px) if fringe_dilate_px > 0 else saturated
+    )
+    ys, xs = np.nonzero(relevant)
+    median_small = _local_median_small(rgb, local_window, downsample)
+    # (N, 1, 3): zelfde vorm-conventie (kleurkanalen op as 2) als een heel
+    # blad, zodat _hue_matches ongewijzigd hergebruikt kan worden.
+    px = _as_float(rgb[ys, xs])[:, None, :]
+    local_median = median_small[ys // downsample, xs // downsample][:, None, :]
+    is_darker = (local_median.max(axis=2) - px.max(axis=2)) > local_delta
+    is_line_like = np.zeros_like(saturated)
+    is_line_like[ys, xs] = (is_darker & _hue_matches(px, local_median))[:, 0]
+
+    colored = saturated & ~is_line_like
     if fringe_dilate_px > 0:
         colored = ndimage.binary_dilation(colored, iterations=fringe_dilate_px) & ~is_line_like
     return colored
@@ -255,11 +298,26 @@ def clean_via_raster(
     page, scale: float, sat_threshold: float = 0.12, remove_text: bool = True
 ) -> tuple[Image.Image, list[tuple[int, int, int, int, str]]]:
     img = render_page(page, scale, alpha=False)
-    arr = np.array(img).astype(np.float32) / 255.0
+    rgb = np.array(img)  # uint8
+    del img
 
-    colored_mask = _colored_mask(arr, sat_threshold)
-    work = arr.copy()
-    work[colored_mask] = [1, 1, 1]
+    colored_mask = _colored_mask(rgb, sat_threshold)
+    # Grijswaarde zoals voorheen (gemiddelde van de 3 float-kanalen), maar
+    # in stroken berekend i.p.v. via een volledige float-kopie van het blad.
+    # Weggevlakte pixels (kleurvlak, en verderop gevonden tekst) worden wit:
+    # het gemiddelde van [1, 1, 1] is exact 1.0, dus 255 na omzetting -
+    # daarmee is `gray` steeds precies wat een volledige float-kopie met die
+    # pixels op wit zou opleveren, zonder die kopie ooit te maken.
+    height = rgb.shape[0]
+    rows_per_chunk = max(1, 4_000_000 // max(1, rgb.shape[1]))
+    gray_f = np.empty(rgb.shape[:2], dtype=np.float32)
+    for r in range(0, height, rows_per_chunk):
+        gray_f[r : r + rows_per_chunk] = _as_float(rgb[r : r + rows_per_chunk]).mean(axis=2)
+    del rgb
+    gray_f[colored_mask] = 1.0
+    del colored_mask
+    gray = (gray_f * 255).astype(np.uint8)
+    del gray_f
 
     ocr_boxes: list[tuple[int, int, int, int, str]] = []
     if remove_text:
@@ -270,16 +328,15 @@ def clean_via_raster(
         else:
             import pytesseract
 
-            orig_h, orig_w = work.shape[:2]
+            orig_h, orig_w = gray.shape
             erased = 0
             try:
                 for k, transpose in _OCR_ROTATIONS:
                     # Elke pas opnieuw vanuit de (inmiddels deels al
-                    # opgeschoonde) 'work' opbouwen: al gevonden/gewiste
+                    # opgeschoonde) 'gray' opbouwen: al gevonden/gewiste
                     # tekst uit een vorige rotatie hoeft dan niet nog eens
                     # (met mogelijk minder zekerheid) herkend te worden.
-                    gray_for_ocr = (work.mean(axis=2) * 255).astype(np.uint8)
-                    ocr_img = Image.fromarray(gray_for_ocr)
+                    ocr_img = Image.fromarray(gray)
                     if transpose is not None:
                         ocr_img = ocr_img.transpose(transpose)
                     data = pytesseract.image_to_data(ocr_img, output_type=pytesseract.Output.DICT)
@@ -300,7 +357,7 @@ def clean_via_raster(
                         pad = max(2, int(0.15 * (y1 - y0)))
                         px0, py0 = max(0, x0 - pad), max(0, y0 - pad)
                         px1, py1 = min(orig_w, x1 + pad), min(orig_h, y1 + pad)
-                        work[py0:py1, px0:px1] = [1, 1, 1]
+                        gray[py0:py1, px0:px1] = 255
                         erased += 1
                 logger.info(
                     "OCR: %d text blocks removed (checked at 0/90/180/270 degrees).", erased
@@ -308,8 +365,7 @@ def clean_via_raster(
             except Exception as e:
                 logger.warning("OCR text removal skipped (%s).", e)
 
-    gray = work.mean(axis=2)
-    L = (gray * 255).astype(np.uint8)
+    L = gray
     # Een rechtstreekse alpha = 255-L geeft dunne/anti-aliased lijnen een
     # zwakke dekking (een lichtgrijs randpixel wordt een bijna onzichtbaar
     # doorzichtig pixel) - muren waren daardoor nauwelijks te onderscheiden
