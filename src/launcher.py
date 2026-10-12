@@ -8,6 +8,7 @@ GEBRUIK
     python -m src.launcher
 """
 
+import logging
 import socket
 import threading
 import webbrowser
@@ -34,6 +35,11 @@ def main():
     print(f"  Server running at: {url}")
     print("  Close this window to stop the server.")
     print()
+
+    # Waitress meldt "Task queue depth is N" zodra er verzoeken op elkaar
+    # wachten (bv. een paar klikken tijdens een lange rotatie) - onschuldig,
+    # maar schrikwekkend in het zwarte venster. Alleen echte fouten tonen.
+    logging.getLogger("waitress.queue").setLevel(logging.ERROR)
 
     threading.Timer(0.75, lambda: webbrowser.open(url)).start()
     serve(app, host="127.0.0.1", port=port)

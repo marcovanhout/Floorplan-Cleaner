@@ -1,9 +1,9 @@
 (function () {
   const container = document.getElementById("stage-container");
   const jobId = document.querySelector(".correct-page").dataset.jobId;
-  const loadingEl = document.getElementById("loading");
   const statusEl = document.getElementById("status-msg");
-  const exportStatusEl = document.getElementById("export-status");
+  const busyEl = document.getElementById("busy-indicator");
+  const busyLabelEl = document.getElementById("busy-label");
   const downloadBtn = document.getElementById("btn-download");
 
   const ROOM_COLOR = "#2f6f4f";
@@ -50,6 +50,70 @@
   // /restore-route. Bewust maar 1 stap diep: dekt de praktische zorg
   // ("oeps, verkeerd geveegd/gedraaid") zonder de complexiteit van een
   // volledige geschiedenis + redo.
+  // ---- bezig-melding + alles op slot ----------------------------------
+  //
+  // Roteren/gummen/undo/exporteren/het eerste laden lopen op de server en
+  // kunnen bij een grote tekening tientallen seconden duren. Zonder
+  // zichtbare melding leek er niets te gebeuren, en elke extra klik op
+  // bv. Rotate zette een TWEEDE rotatie in de wachtrij. runBusy() toont
+  // daarom een draaiend rondje + oplopende teller in de werkbalk en zet
+  // zolang alles op slot (knoppen via updateToolbarState, canvas-invoer
+  // via setupBusyInputBlock, sneltoetsen in de keydown-handler); in de
+  // finally gaat alles vanzelf weer open, ook als de actie mislukt.
+  let busy = false;
+
+  async function runBusy(label, fn) {
+    if (busy) return;
+    busy = true;
+    document.body.classList.add("busy");
+    updateToolbarState();
+    const startTime = Date.now();
+    const tick = () => {
+      busyLabelEl.textContent = `${label} (${formatElapsed(Math.round((Date.now() - startTime) / 1000))})`;
+    };
+    tick();
+    busyEl.hidden = false;
+    const timer = setInterval(tick, 1000);
+    try {
+      return await fn();
+    } finally {
+      clearInterval(timer);
+      busyEl.hidden = true;
+      busy = false;
+      document.body.classList.remove("busy");
+      updateToolbarState();
+    }
+  }
+
+  // Zelfde notatie als de teller op de startpagina (upload.js).
+  function formatElapsed(seconds) {
+    if (seconds < 60) return `${seconds}s`;
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}m ${String(s).padStart(2, "0")}s`;
+  }
+
+  // Vangt alle muis-/aanraak-/scroll-invoer op het canvas af in de
+  // capture-fase - dus vóórdat Konva (dat luistert op een element BINNEN
+  // de container) er iets van ziet. Eén plek i.p.v. een busy-check in elke
+  // losse Konva-handler (klikken, slepen, tekenen, gummen, pannen, zoomen,
+  // dubbelklik-hernoemen, de Transformer-grepen).
+  function setupBusyInputBlock() {
+    const events = ["mousedown", "mousemove", "mouseup", "click", "dblclick", "touchstart", "touchmove", "touchend", "wheel", "pointerdown", "pointermove", "pointerup"];
+    events.forEach((type) => {
+      container.addEventListener(
+        type,
+        (e) => {
+          if (!busy) return;
+          e.stopPropagation();
+          // wheel: anders scrollt de pagina zelf mee.
+          if (type === "wheel") e.preventDefault();
+        },
+        { capture: true, passive: false }
+      );
+    });
+  }
+
   let currentImageBlob = null;
   let undoSnapshot = null; // {rooms, imageBlob} | null
 
@@ -60,15 +124,14 @@
     // hoeft dan de server niet in (zie undo() hieronder), alleen bij
     // roteren/gummen is er ook een afbeelding-versie om terug te zetten.
     undoSnapshot = { rooms: rooms.map((r) => ({ ...r })), imageBlob: imageChanged ? currentImageBlob : null };
-    document.getElementById("btn-undo").disabled = false;
+    updateToolbarState();
   }
 
   async function undo() {
-    if (!undoSnapshot) return;
+    if (!undoSnapshot || busy) return;
     clearStatus();
     const snap = undoSnapshot;
     undoSnapshot = null; // eenmalig: meteen "verbruikt", geen redo
-    document.getElementById("btn-undo").disabled = true;
     transformer.nodes([]);
     selectedIds = [];
 
@@ -78,6 +141,12 @@
       markUnsaved();
       return;
     }
+    // Alleen de afbeelding-undo gaat langs de server (en duurt dus even) -
+    // de vakjes-undo hierboven is meteen klaar en heeft geen melding nodig.
+    await runBusy("Undoing...", () => restoreSnapshot(snap));
+  }
+
+  async function restoreSnapshot(snap) {
     const prevWidth = imageWidth;
     const prevHeight = imageHeight;
     try {
@@ -282,9 +351,15 @@
     roomLayer.draw();
   }
 
+  // Eén plek die bepaalt welke knoppen klikbaar zijn: tijdens runBusy()
+  // alles grijs, daarna weer volgens de selectie/undo-stand.
   function updateToolbarState() {
-    document.getElementById("btn-delete").disabled = selectedIds.length === 0;
-    document.getElementById("btn-merge").disabled = selectedIds.length < 2;
+    document.querySelectorAll(".toolbar button, .toolbar input, .export-row button").forEach((el) => {
+      el.disabled = busy;
+    });
+    document.getElementById("btn-delete").disabled = busy || selectedIds.length === 0;
+    document.getElementById("btn-merge").disabled = busy || selectedIds.length < 2;
+    document.getElementById("btn-undo").disabled = busy || !undoSnapshot;
   }
 
   // ---- drag/resize -> state terugschrijven -------------------------------
@@ -601,7 +676,7 @@
       const minSizeImgPx = 8 / totalScale(); // zelfde ondergrens als bij "+ Draw box"
       if (w < minSizeImgPx || h < minSizeImgPx) return;
 
-      eraseRect(Math.round(x0), Math.round(y0), Math.round(x0 + w), Math.round(y0 + h));
+      runBusy("Erasing...", () => eraseRect(Math.round(x0), Math.round(y0), Math.round(x0 + w), Math.round(y0 + h)));
       // zelfde reden als bij setupDrawing/setupMarqueeSelect: onderdrukt de
       // synthetische achtergrond-klik die anders meteen hierna volgt.
       suppressNextBackgroundClick = true;
@@ -846,24 +921,28 @@
   }
 
   function rotateClockwise() {
-    return applyRotateResponse(
-      fetch(`/jobs/${jobId}/rotate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rooms }),
-      }),
-      "Rotate failed: "
+    return runBusy("Rotating...", () =>
+      applyRotateResponse(
+        fetch(`/jobs/${jobId}/rotate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ rooms }),
+        }),
+        "Rotate failed: "
+      )
     );
   }
 
   function rotateByAngle(degrees) {
-    return applyRotateResponse(
-      fetch(`/jobs/${jobId}/rotate-angle`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rooms, degrees }),
-      }),
-      "Rotate failed: "
+    return runBusy("Rotating...", () =>
+      applyRotateResponse(
+        fetch(`/jobs/${jobId}/rotate-angle`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ rooms, degrees }),
+        }),
+        "Rotate failed: "
+      )
     );
   }
 
@@ -944,30 +1023,10 @@
     setupPanning();
     setupMarqueeSelect();
     setupWheelZoom();
+    setupBusyInputBlock();
 
-    let resp;
-    try {
-      resp = await fetch(`/jobs/${jobId}/detect`);
-      if (!resp.ok) throw new Error(`Server error (${resp.status})`);
-    } catch (err) {
-      loadingEl.textContent = "Failed to load: " + err.message;
-      return;
-    }
-    const data = await resp.json();
-    imageWidth = data.width;
-    imageHeight = data.height;
-    rooms = data.rooms.map((r) => ({ ...r }));
-    loadingEl.hidden = true;
-
-    try {
-      await loadBackgroundImage(data.image_url);
-    } catch (err) {
-      loadingEl.hidden = false;
-      loadingEl.textContent = "Failed to load: " + err.message;
-      return;
-    }
-    fitToContainer();
-    redrawAll();
+    const loaded = await runBusy("Loading drawing...", loadInitial);
+    if (!loaded) return;
 
     window.addEventListener("resize", () => {
       fitToContainer();
@@ -993,6 +1052,13 @@
       rotateByAngle(degrees);
     });
     document.addEventListener("keydown", (e) => {
+      if (busy && document.activeElement.tagName !== "INPUT") {
+        // Sneltoetsen (Delete, Ctrl+Z) doen niets zolang er iets loopt.
+        if (e.key === "Delete" || e.key === "Backspace" || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z")) {
+          e.preventDefault();
+        }
+        return;
+      }
       if ((e.key === "Delete" || e.key === "Backspace") && selectedIds.length && document.activeElement.tagName !== "INPUT") {
         e.preventDefault();
         deleteSelected();
@@ -1019,9 +1085,33 @@
     });
   }
 
-  async function doExport() {
+  // Eerste keer laden: detectie + achtergrondafbeelding. Geeft false terug
+  // als het mislukt (de foutmelding staat dan in de statusregel - niet in
+  // het canvasvlak, want Konva maakt de container leeg bij het aanmaken).
+  async function loadInitial() {
+    try {
+      const resp = await fetch(`/jobs/${jobId}/detect`);
+      if (!resp.ok) throw new Error(`Server error (${resp.status})`);
+      const data = await resp.json();
+      imageWidth = data.width;
+      imageHeight = data.height;
+      rooms = data.rooms.map((r) => ({ ...r }));
+      await loadBackgroundImage(data.image_url);
+    } catch (err) {
+      showStatus("Failed to load: " + err.message, true);
+      return false;
+    }
+    fitToContainer();
+    redrawAll();
+    return true;
+  }
+
+  function doExport() {
+    return runBusy("Exporting...", exportRooms);
+  }
+
+  async function exportRooms() {
     clearStatus();
-    exportStatusEl.hidden = false;
     // Dimt een al-zichtbare downloadknop van een vorige export (i.p.v. 'm
     // te verbergen) - dezelfde "updating"-klasse die ook aangeeft dat de
     // knop niet meer bij de huidige staat hoort na een latere wijziging,
@@ -1044,10 +1134,8 @@
       downloadBtn.href = data.download_url;
       downloadBtn.hidden = false;
       downloadBtn.classList.remove("updating");
-      exportStatusEl.hidden = true;
     } catch (err) {
       downloadBtn.classList.remove("updating");
-      exportStatusEl.hidden = true;
       showStatus("Export failed: " + err.message, true);
     }
   }

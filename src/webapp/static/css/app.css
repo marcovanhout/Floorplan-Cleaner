@@ -307,6 +307,37 @@ ul.hint strong { color: var(--text); }
   cursor: pointer;
   transition: background 0.15s ease, border-color 0.15s ease;
 }
+/* Bezig-melding in de werkbalk (zie runBusy() in correct.js): draaiend
+   rondje + "Rotating... (4s)". Bewust geen voortgangsbalk - de server
+   weet zelf niet hoe ver hij is. */
+.busy-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--accent);
+  white-space: nowrap;
+}
+.busy-indicator[hidden] { display: none; }
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--accent-ring);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Zolang er iets op de achtergrond loopt staat alles op slot: zandloper
+   overal (!important wint ook van de cursor die Konva inline op het canvas
+   zet), en de twee links (Back/Download) - die kun je niet "disabled"
+   maken zoals een knop - grijs en onklikbaar. */
+body.busy, body.busy * { cursor: wait !important; }
+body.busy .tool-btn-link,
+body.busy #btn-download { opacity: 0.4; pointer-events: none; }
+
 .tool-btn-link:hover { background: var(--bg); border-color: var(--border-strong); }
 
 .stage-container {

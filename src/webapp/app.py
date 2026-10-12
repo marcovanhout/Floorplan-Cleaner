@@ -10,8 +10,17 @@ import sys
 from pathlib import Path
 
 from flask import Flask
+from PIL import Image
 
 from ..version import get_version
+
+
+# Pillow weigert standaard afbeeldingen boven ~179 MP (DecompressionBombError,
+# met al een waarschuwing vanaf ~89 MP) - bedoeld tegen kwaadaardige
+# bestanden van buitenaf. Hier komen alle afbeeldingen van de tool zelf
+# (bv. een A0-tekening op hoge schaal bij /restore = Undo), dus de limiet
+# mag eraf; anders breekt Undo na roteren/gummen bij heel grote tekeningen.
+Image.MAX_IMAGE_PIXELS = None
 
 
 def _webapp_dir() -> Path:

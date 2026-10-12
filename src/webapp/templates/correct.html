@@ -19,17 +19,18 @@
       <input type="number" id="rotate-angle-input" value="1" step="0.5">
       <button id="btn-rotate-angle">° Rotate</button>
     </span>
+    <span id="busy-indicator" class="busy-indicator" role="status" aria-live="polite" hidden>
+      <span class="spinner" aria-hidden="true"></span>
+      <span id="busy-label"></span>
+    </span>
   </div>
 
   <p id="status-msg" class="status" hidden></p>
 
-  <div id="stage-container" class="stage-container">
-    <p id="loading" class="status">Loading...</p>
-  </div>
+  <div id="stage-container" class="stage-container"></div>
 
   <div class="export-row">
     <button id="btn-export" class="primary">Export</button>
-    <span id="export-status" class="status" hidden>Exporting...</span>
     <a id="btn-download" href="#" class="primary-link" hidden>Download rooms.zip</a>
   </div>
 
