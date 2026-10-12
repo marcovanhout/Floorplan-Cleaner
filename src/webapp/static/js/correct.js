@@ -40,26 +40,17 @@
   let bgImageNode = null; // Konva.Image met de plattegrond-achtergrond
   const nodesById = new Map(); // room.id -> {group, rect, label}
 
-  // ---- undo (1 stap terug, geen redo) --------------------------------
-  //
-  // Ruimte-vak-bewerkingen leven alleen client-side (undo daarvan is dus
-  // simpel: de oude 'rooms'-array terugzetten). Roteren/gummen passen de
-  // afbeelding blijvend aan OP DE SERVER - om die ook terug te kunnen
-  // draaien bewaart de client zelf de laatst geladen afbeelding als Blob
-  // (zie loadBackgroundImage) en stuurt die bij undo terug naar een nieuwe
-  // /restore-route. Bewust maar 1 stap diep: dekt de praktische zorg
-  // ("oeps, verkeerd geveegd/gedraaid") zonder de complexiteit van een
-  // volledige geschiedenis + redo.
   // ---- bezig-melding + alles op slot ----------------------------------
   //
   // Roteren/gummen/undo/exporteren/het eerste laden lopen op de server en
   // kunnen bij een grote tekening tientallen seconden duren. Zonder
   // zichtbare melding leek er niets te gebeuren, en elke extra klik op
   // bv. Rotate zette een TWEEDE rotatie in de wachtrij. runBusy() toont
-  // daarom een draaiend rondje + oplopende teller in de werkbalk en zet
-  // zolang alles op slot (knoppen via updateToolbarState, canvas-invoer
-  // via setupBusyInputBlock, sneltoetsen in de keydown-handler); in de
-  // finally gaat alles vanzelf weer open, ook als de actie mislukt.
+  // daarom een draaiend rondje + oplopende teller rechtsboven in het
+  // tekenvlak en zet zolang alles op slot (knoppen via
+  // updateToolbarState, canvas-invoer via setupBusyInputBlock, sneltoetsen
+  // in de keydown-handler); in de finally gaat alles vanzelf weer open,
+  // ook als de actie mislukt.
   let busy = false;
 
   async function runBusy(label, fn) {
@@ -114,6 +105,16 @@
     });
   }
 
+  // ---- undo (1 stap terug, geen redo) --------------------------------
+  //
+  // Ruimte-vak-bewerkingen leven alleen client-side (undo daarvan is dus
+  // simpel: de oude 'rooms'-array terugzetten). Roteren/gummen passen de
+  // afbeelding blijvend aan OP DE SERVER - om die ook terug te kunnen
+  // draaien bewaart de client zelf de laatst geladen afbeelding als Blob
+  // (zie loadBackgroundImage) en stuurt die bij undo terug naar een nieuwe
+  // /restore-route. Bewust maar 1 stap diep: dekt de praktische zorg
+  // ("oeps, verkeerd geveegd/gedraaid") zonder de complexiteit van een
+  // volledige geschiedenis + redo.
   let currentImageBlob = null;
   let undoSnapshot = null; // {rooms, imageBlob} | null
 
