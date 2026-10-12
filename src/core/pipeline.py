@@ -206,14 +206,26 @@ def rotate_by_angle(
     return rotated_image, rotated_rooms
 
 
+def clip_rect(image: Image.Image, x0: int, y0: int, x1: int, y1: int) -> tuple[int, int, int, int]:
+    """Rechthoek genormaliseerd (x0 <= x1, y0 <= y1) en bijgesneden tot
+    binnen de afbeelding - kan leeg zijn (x0 == x1 of y0 == y1)."""
+    x0, x1 = sorted((max(0, min(x0, image.width)), max(0, min(x1, image.width))))
+    y0, y1 = sorted((max(0, min(y0, image.height)), max(0, min(y1, image.height))))
+    return x0, y0, x1, y1
+
+
 def erase_rect(image: Image.Image, x0: int, y0: int, x1: int, y1: int) -> Image.Image:
     """Vlakt een door de gebruiker aangewezen rechthoek volledig transparant -
     voor het handmatig wegvegen van restjes die de automatische opschoning
     laat staan (bv. tekst die OCR miste). Los van de ruimte-vakken zelf, die
-    veranderen hierdoor niet."""
-    img = image.convert("RGBA")
-    x0, x1 = sorted((max(0, min(x0, img.width)), max(0, min(x1, img.width))))
-    y0, y1 = sorted((max(0, min(y0, img.height)), max(0, min(y1, img.height))))
+    veranderen hierdoor niet.
+
+    Een RGBA-afbeelding wordt ter plekke bewerkt (en teruggegeven): een
+    volledige kopie kost bij een grote tekening (100+ MP) al gauw een paar
+    tienden van een seconde, voor het wissen van misschien maar een paar
+    honderd pixels."""
+    img = image if image.mode == "RGBA" else image.convert("RGBA")
+    x0, y0, x1, y1 = clip_rect(img, x0, y0, x1, y1)
     if x1 > x0 and y1 > y0:
         ImageDraw.Draw(img).rectangle([x0, y0, x1 - 1, y1 - 1], fill=(0, 0, 0, 0))
     return img

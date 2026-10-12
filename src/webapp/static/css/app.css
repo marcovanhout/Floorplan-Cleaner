@@ -358,11 +358,12 @@ ul.hint strong { color: var(--text); }
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* Zolang er iets op de achtergrond loopt staat alles op slot: zandloper
-   overal (!important wint ook van de cursor die Konva inline op het canvas
-   zet), en de twee links (Back/Download) - die kun je niet "disabled"
-   maken zoals een knop - grijs en onklikbaar. */
-body.busy, body.busy * { cursor: wait !important; }
+/* Zolang er iets op de achtergrond loopt staat alles op slot: de twee
+   links (Back/Download) - die kun je niet "disabled" maken zoals een
+   knop - grijs en onklikbaar. De zandloper (!important wint ook van de
+   cursor die Konva inline op het canvas zet) komt pas mee met de melding
+   zelf (.busy-visible, na een korte vertraging - zie runBusy). */
+body.busy-visible, body.busy-visible * { cursor: wait !important; }
 body.busy .tool-btn-link,
 body.busy #btn-download { opacity: 0.4; pointer-events: none; }
 

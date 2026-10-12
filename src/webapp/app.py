@@ -18,8 +18,9 @@ from ..version import get_version
 # Pillow weigert standaard afbeeldingen boven ~179 MP (DecompressionBombError,
 # met al een waarschuwing vanaf ~89 MP) - bedoeld tegen kwaadaardige
 # bestanden van buitenaf. Hier komen alle afbeeldingen van de tool zelf
-# (bv. een A0-tekening op hoge schaal bij /restore = Undo), dus de limiet
-# mag eraf; anders breekt Undo na roteren/gummen bij heel grote tekeningen.
+# (bv. een A0-tekening op hoge schaal die bij Undo van een vrije-hoek-draai
+# uit de eigen PNG-kopie wordt teruggelezen, zie history.py), dus de limiet
+# mag eraf; anders breekt Undo bij heel grote tekeningen.
 Image.MAX_IMAGE_PIXELS = None
 
 

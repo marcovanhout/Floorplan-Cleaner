@@ -10,7 +10,8 @@
     <button id="tool-erase" class="tool-btn" data-tool="erase" title="Draw a rectangle to erase it (make transparent)">⌫ Erase</button>
     <button id="btn-merge" disabled title="Select 2 or more boxes to merge">Merge</button>
     <button id="btn-delete" disabled title="Select a box to delete">Delete</button>
-    <button id="btn-undo" disabled title="Undo the last change">↶ Undo</button>
+    <button id="btn-undo" disabled title="Nothing to undo">↶ Undo</button>
+    <button id="btn-redo" disabled title="Nothing to redo">↷ Redo</button>
     <span class="spacer"></span>
     <button id="btn-zoom-in" title="Zoom in">+</button>
     <button id="btn-zoom-out" title="Zoom out">-</button>
@@ -46,7 +47,7 @@
     <li><strong>Merge</strong> — combine 2 or more selected boxes into one (e.g. a door that only belongs to a single room).</li>
     <li><strong>Erase</strong> — drag a rectangle to permanently wipe that part of the drawing.</li>
     <li><strong>Rotate</strong> — the angle field rotates by a custom amount (e.g. to straighten a skewed scan); at a large angle, room boxes then fit a bit looser than the room itself.</li>
-    <li><strong>Undo</strong> — only the single most recent change (no further history, no redo).</li>
+    <li><strong>Undo / Redo</strong> — step back or forward through your last 20 changes (also Ctrl+Z, and Ctrl+Y or Ctrl+Shift+Z).</li>
   </ul>
 </div>
 {% endblock %}

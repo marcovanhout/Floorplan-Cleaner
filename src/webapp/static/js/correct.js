@@ -53,6 +53,11 @@
   // ook als de actie mislukt.
   let busy = false;
 
+  // De melding zelf (rondje + zandloper) verschijnt pas na BUSY_SHOW_DELAY_MS:
+  // een snelle actie (bv. een veeg, ~0,3 s) zou anders een flitsend rondje
+  // geven. Op slot gaat alles wél meteen.
+  const BUSY_SHOW_DELAY_MS = 300;
+
   async function runBusy(label, fn) {
     if (busy) return;
     busy = true;
@@ -62,16 +67,20 @@
     const tick = () => {
       busyLabelEl.textContent = `${label} (${formatElapsed(Math.round((Date.now() - startTime) / 1000))})`;
     };
-    tick();
-    busyEl.hidden = false;
+    const showTimer = setTimeout(() => {
+      tick();
+      busyEl.hidden = false;
+      document.body.classList.add("busy-visible");
+    }, BUSY_SHOW_DELAY_MS);
     const timer = setInterval(tick, 1000);
     try {
       return await fn();
     } finally {
+      clearTimeout(showTimer);
       clearInterval(timer);
       busyEl.hidden = true;
       busy = false;
-      document.body.classList.remove("busy");
+      document.body.classList.remove("busy", "busy-visible");
       updateToolbarState();
     }
   }
@@ -105,77 +114,146 @@
     });
   }
 
-  // ---- undo (1 stap terug, geen redo) --------------------------------
+  // ---- undo/redo (tot HISTORY_LIMIT stappen) ---------------------------
   //
-  // Ruimte-vak-bewerkingen leven alleen client-side (undo daarvan is dus
-  // simpel: de oude 'rooms'-array terugzetten). Roteren/gummen passen de
-  // afbeelding blijvend aan OP DE SERVER - om die ook terug te kunnen
-  // draaien bewaart de client zelf de laatst geladen afbeelding als Blob
-  // (zie loadBackgroundImage) en stuurt die bij undo terug naar een nieuwe
-  // /restore-route. Bewust maar 1 stap diep: dekt de praktische zorg
-  // ("oeps, verkeerd geveegd/gedraaid") zonder de complexiteit van een
-  // volledige geschiedenis + redo.
-  let currentImageBlob = null;
-  let undoSnapshot = null; // {rooms, imageBlob} | null
+  // Eén gezamenlijke rij stappen voor álle wijzigingen, zoals in Word.
+  // Elk item bewaart de ruimte-vakken van VÓÓR de stap; bij undo/redo
+  // wordt de huidige vakjeslijst het item op de andere stapel (de rij is
+  // lineair, dus "huidig" is altijd precies de toestand na/voor die stap).
+  //
+  // Roteren/gummen veranderen ook de afbeelding OP DE SERVER. Die houdt
+  // daar zelf, zuinig, een eigen rij afbeeldingsstappen bij in dezelfde
+  // volgorde (zie src/webapp/history.py); zo'n item heeft hier daarom
+  // `image: {kind, stepId, rect?}` en undo/redo ervan gaat langs /undo en
+  // /redo. Vroeger bewaarde de browser per stap een complete kopie van de
+  // tekening - bij een grote tekening ~0,5 GB per stap, niet te doen voor
+  // 20 stappen.
+  const HISTORY_LIMIT = 20; // zelfde als HISTORY_LIMIT in history.py
+  let undoStack = []; // [{label, rooms, image}]
+  let redoStack = [];
 
-  function captureUndoSnapshot(imageChanged) {
-    if (!currentImageBlob) return; // nog niet geladen, kan niet gebeuren na init()
-    // Bij een zuivere ruimte-vak-wijziging (slepen/hernoemen/samenvoegen/
-    // verwijderen/nieuw tekenen) verandert de afbeelding niet - undo daarvan
-    // hoeft dan de server niet in (zie undo() hieronder), alleen bij
-    // roteren/gummen is er ook een afbeelding-versie om terug te zetten.
-    undoSnapshot = { rooms: rooms.map((r) => ({ ...r })), imageBlob: imageChanged ? currentImageBlob : null };
+  function snapshotRooms() {
+    return rooms.map((r) => ({ ...r }));
+  }
+
+  // Aanroepen bij elke wijziging; roomsBefore = de vakjes van vóór de stap.
+  function pushHistory(label, roomsBefore, image = null) {
+    undoStack.push({ label, rooms: roomsBefore, image });
+    if (undoStack.length > HISTORY_LIMIT) undoStack.shift();
+    redoStack = [];
     updateToolbarState();
   }
 
-  async function undo() {
-    if (!undoSnapshot || busy) return;
-    clearStatus();
-    const snap = undoSnapshot;
-    undoSnapshot = null; // eenmalig: meteen "verbruikt", geen redo
-    transformer.nodes([]);
-    selectedIds = [];
+  // ---- gum-rechthoekjes op het scherm ----------------------------------
+  //
+  // Een veeg wordt meteen op het scherm getoond met een "destination-out"-
+  // rechthoek in bgLayer (wist die pixels op het canvas, net als het
+  // transparant maken op de server) - zonder de hele tekening opnieuw te
+  // laten inpakken en downloaden, wat bij een grote tekening seconden
+  // kostte. Undo van een veeg doet het omgekeerde: alleen dat stukje van
+  // de (inmiddels herstelde) server-afbeelding ophalen en er bovenop
+  // tekenen; redo legt er weer een gum-rechthoek overheen. Omdat de rij
+  // stappen lineair is, geeft "in volgorde over elkaar leggen" altijd
+  // precies de server-afbeelding. Bij elke volledige herlaadbeurt van de
+  // afbeelding zit alles al in de server-afbeelding en worden deze
+  // tijdelijke lagen opgeruimd (zie loadBackgroundImage).
+  const screenEdits = []; // Konva-nodes bovenop bgImageNode
 
-    if (!snap.imageBlob) {
-      rooms = snap.rooms;
-      redrawAll();
-      markUnsaved();
-      return;
-    }
-    // Alleen de afbeelding-undo gaat langs de server (en duurt dus even) -
-    // de vakjes-undo hierboven is meteen klaar en heeft geen melding nodig.
-    await runBusy("Undoing...", () => restoreSnapshot(snap));
+  function addEraseOverlay(rect) {
+    const [x0, y0, x1, y1] = rect;
+    const overlay = new Konva.Rect({
+      x: x0,
+      y: y0,
+      width: x1 - x0,
+      height: y1 - y0,
+      fill: "#000",
+      globalCompositeOperation: "destination-out",
+      listening: false,
+    });
+    bgLayer.add(overlay);
+    screenEdits.push(overlay);
+    bgLayer.draw();
+    return overlay;
   }
 
-  async function restoreSnapshot(snap) {
-    const prevWidth = imageWidth;
-    const prevHeight = imageHeight;
+  // Na een server-undo van een veeg: het herstelde stukje ophalen en
+  // precies op die plek terugtekenen (eerst leegmaken, dan erop).
+  async function restoreEraseOnScreen(rect) {
+    const x0 = Math.max(0, Math.min(rect[0], imageWidth));
+    const y0 = Math.max(0, Math.min(rect[1], imageHeight));
+    const x1 = Math.max(0, Math.min(rect[2], imageWidth));
+    const y1 = Math.max(0, Math.min(rect[3], imageHeight));
+    if (x1 <= x0 || y1 <= y0) return; // veeg viel helemaal naast de tekening
+    const img = await loadImageElement(`/jobs/${jobId}/image-region?x0=${x0}&y0=${y0}&x1=${x1}&y1=${y1}&t=${Date.now()}`);
+    addEraseOverlay([x0, y0, x1, y1]);
+    const patch = new Konva.Image({ image: img, x: x0, y: y0, width: x1 - x0, height: y1 - y0, listening: false });
+    bgLayer.add(patch);
+    screenEdits.push(patch);
+    bgLayer.draw();
+  }
+
+  function clearScreenEdits() {
+    screenEdits.forEach((node) => node.destroy());
+    screenEdits.length = 0;
+  }
+
+  function undo() {
+    return moveHistory("undo");
+  }
+
+  function redo() {
+    return moveHistory("redo");
+  }
+
+  async function moveHistory(direction) {
+    const from = direction === "undo" ? undoStack : redoStack;
+    const to = direction === "undo" ? redoStack : undoStack;
+    if (busy || from.length === 0) return;
+    clearStatus();
+    const entry = from[from.length - 1];
+
+    if (entry.image) {
+      const ok = await runBusy(direction === "undo" ? "Undoing..." : "Redoing...", () => applyImageHistory(direction, entry.image));
+      if (!ok) return; // foutmelding staat er al; beide stapels ongewijzigd
+    }
+    from.pop();
+    to.push({ label: entry.label, rooms: snapshotRooms(), image: entry.image });
+    transformer.nodes([]);
+    selectedIds = [];
+    rooms = entry.rooms.map((r) => ({ ...r }));
+    redrawAll();
+    markUnsaved();
+    updateToolbarState();
+  }
+
+  // Server-kant van een afbeeldingsstap terug- of vooruitzetten en het
+  // scherm bijwerken. Geeft false terug als het mislukt.
+  async function applyImageHistory(direction, image) {
     try {
-      const body = new FormData();
-      body.append("image", snap.imageBlob, "image.png");
-      body.append("rooms", JSON.stringify(snap.rooms));
-      const resp = await fetch(`/jobs/${jobId}/restore`, { method: "POST", body });
+      const resp = await fetch(`/jobs/${jobId}/${direction}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ step_id: image.stepId }),
+      });
       if (!resp.ok) {
         const text = await resp.text();
         throw new Error(text || `Server error (${resp.status})`);
       }
       const data = await resp.json();
+      if (image.kind === "erase") {
+        if (direction === "redo") addEraseOverlay(image.rect);
+        else await restoreEraseOnScreen(image.rect);
+        return true;
+      }
+      const sizeChanged = data.width !== imageWidth || data.height !== imageHeight;
       imageWidth = data.width;
       imageHeight = data.height;
-      rooms = data.rooms.map((r) => ({ ...r }));
       await loadBackgroundImage(`/jobs/${jobId}/image?t=${Date.now()}`);
-      // Alleen als de afmetingen echt veranderd zijn (bv. undo van een
-      // rotatie) is fitToContainer() nodig - het huidige zoomniveau/pan
-      // klopt dan sowieso niet meer tegen de nieuwe afbeeldingsgrootte.
-      // Bij een gum-undo (afmetingen ongewijzigd) blijft de gebruiker
-      // gewoon op hetzelfde zoomniveau/dezelfde plek staan.
-      if (imageWidth !== prevWidth || imageHeight !== prevHeight) {
-        fitToContainer();
-      }
-      redrawAll();
-      markUnsaved();
+      if (sizeChanged) fitToContainer();
+      return true;
     } catch (err) {
-      showStatus("Undo failed: " + err.message, true);
+      showStatus((direction === "undo" ? "Undo" : "Redo") + " failed: " + err.message, true);
+      return false;
     }
   }
 
@@ -360,7 +438,12 @@
     });
     document.getElementById("btn-delete").disabled = busy || selectedIds.length === 0;
     document.getElementById("btn-merge").disabled = busy || selectedIds.length < 2;
-    document.getElementById("btn-undo").disabled = busy || !undoSnapshot;
+    const undoBtn = document.getElementById("btn-undo");
+    const redoBtn = document.getElementById("btn-redo");
+    undoBtn.disabled = busy || undoStack.length === 0;
+    redoBtn.disabled = busy || redoStack.length === 0;
+    undoBtn.title = undoStack.length ? `Undo: ${undoStack[undoStack.length - 1].label}` : "Nothing to undo";
+    redoBtn.title = redoStack.length ? `Redo: ${redoStack[redoStack.length - 1].label}` : "Nothing to redo";
   }
 
   // ---- drag/resize -> state terugschrijven -------------------------------
@@ -368,7 +451,7 @@
   function onTransformOrDragEnd(room) {
     const nodes = nodesById.get(room.id);
     if (!nodes) return;
-    captureUndoSnapshot(false);
+    pushHistory("Move/resize box", snapshotRooms());
     const group = nodes.group;
     const rect = nodes.rect;
     const scaleX = group.scaleX();
@@ -398,7 +481,10 @@
 
   // ---- hernoemen (HTML input overlay op Konva.Text) ----------------------
 
-  function startRename(id) {
+  // partOfDraw: hernoemen direct na het tekenen van een nieuw vak hoort bij
+  // die ene "Draw box"-stap - anders zou Undo eerst alleen de naam
+  // terugdraaien en pas bij een tweede klik het vak zelf.
+  function startRename(id, partOfDraw = false) {
     const room = rooms.find((r) => r.id === id);
     const nodes = nodesById.get(id);
     if (!room || !nodes) return;
@@ -423,8 +509,9 @@
     input.select();
 
     function commit() {
-      captureUndoSnapshot(false);
-      room.name = input.value.trim() || null;
+      const newName = input.value.trim() || null;
+      if (newName !== room.name && !partOfDraw) pushHistory("Rename", snapshotRooms());
+      room.name = newName;
       if (room.source === "auto") room.source = "user-edited";
       syncNodeToRoom(room);
       document.body.removeChild(input);
@@ -444,7 +531,7 @@
 
   function deleteSelected() {
     if (selectedIds.length === 0) return;
-    captureUndoSnapshot(false);
+    pushHistory("Delete", snapshotRooms());
     transformer.nodes([]); // eerst loskoppelen, anders crasht Konva bij destroy() van een vastgehouden node
     rooms = rooms.filter((r) => !selectedIds.includes(r.id));
     selectedIds.forEach((id) => {
@@ -475,7 +562,7 @@
     const suggestedName = selected.find((r) => r.name)?.name || "";
     const name = window.prompt("Name for the merged room:", suggestedName);
     if (name === null) return; // geannuleerd
-    captureUndoSnapshot(false);
+    pushHistory("Merge", snapshotRooms());
 
     const merged = {
       id: newRoomId(),
@@ -570,7 +657,7 @@
       const minSizeImgPx = 8 / totalScale(); // 8 schermpixels, omgerekend
       if (w < minSizeImgPx || h < minSizeImgPx) return;
 
-      captureUndoSnapshot(false);
+      pushHistory("Draw box", snapshotRooms());
       const room = {
         id: newRoomId(),
         bbox: [Math.round(x0), Math.round(y0), Math.round(x0 + w), Math.round(y0 + h)],
@@ -582,7 +669,7 @@
       roomLayer.draw();
       setTool("select");
       selectRoom(room.id, false);
-      startRename(room.id);
+      startRename(room.id, true);
       markUnsaved();
       // mousedown EN mouseup van deze teken-actie vonden beide plaats op de
       // achtergrond, dus Konva vuurt hierna nog een synthetische "click" op
@@ -599,15 +686,18 @@
   // een ruimte-vak) - voor restjes die de automatische opschoning laat
   // staan (bv. tekst die OCR miste). Zelfde sleep-interactie als
   // setupDrawing() hierboven, maar het resultaat gaat naar de server i.p.v.
-  // een nieuw ruimte-vak aan te maken. Met "Undo" (zie hierboven) 1 stap
-  // terug te draaien.
+  // een nieuw ruimte-vak aan te maken. Met Undo/Redo terug/vooruit te
+  // zetten (zie hierboven).
 
   let eraseRectPreview = null;
   let eraseStart = null;
 
   async function eraseRect(x0, y0, x1, y1) {
     clearStatus();
-    captureUndoSnapshot(true);
+    // Meteen op het scherm wissen (zie addEraseOverlay); de server doet
+    // daarna precies hetzelfde in zijn eigen kopie.
+    const overlay = addEraseOverlay([x0, y0, x1, y1]);
+    const roomsBefore = snapshotRooms();
     try {
       const resp = await fetch(`/jobs/${jobId}/erase`, {
         method: "POST",
@@ -618,13 +708,13 @@
         const text = await resp.text();
         throw new Error(text || `Server error (${resp.status})`);
       }
-      // Afmetingen en ruimte-vakken veranderen niet door een gum-actie -
-      // alleen de achtergrondafbeelding opnieuw laden volstaat (geen
-      // fitToContainer/redrawAll nodig, die zijn voor roteren waar de
-      // afbeeldingsgrootte wel kan wijzigen).
-      await loadBackgroundImage(`/jobs/${jobId}/image?t=${Date.now()}`);
+      const data = await resp.json();
+      pushHistory("Erase", roomsBefore, { kind: "erase", stepId: data.step_id, rect: [x0, y0, x1, y1] });
       markUnsaved();
     } catch (err) {
+      screenEdits.splice(screenEdits.indexOf(overlay), 1);
+      overlay.destroy();
+      bgLayer.draw();
       showStatus("Erase failed: " + err.message, true);
     }
   }
@@ -894,9 +984,9 @@
   // roepen server-side een rotate-endpoint aan met de huidige rooms, en
   // verwerken het antwoord (nieuwe afbeelding + omgerekende vakken) op
   // dezelfde manier.
-  async function applyRotateResponse(fetchPromise, errorPrefix) {
+  async function applyRotateResponse(fetchPromise, errorPrefix, label) {
     clearStatus();
-    captureUndoSnapshot(true);
+    const roomsBefore = snapshotRooms();
     transformer.nodes([]); // loskoppelen: rooms/afbeelding worden zo vervangen
     selectedIds = [];
     try {
@@ -906,6 +996,9 @@
         throw new Error(text || `Server error (${resp.status})`);
       }
       const data = await resp.json();
+      // Meteen vastleggen (nog vóór het herladen): de server heeft de stap
+      // al in zijn rij staan, en beide rijen moeten gelijk blijven lopen.
+      pushHistory(label, roomsBefore, { kind: "rotate", stepId: data.step_id });
       imageWidth = data.width;
       imageHeight = data.height;
       rooms = data.rooms.map((r) => ({ ...r }));
@@ -929,7 +1022,8 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ rooms }),
         }),
-        "Rotate failed: "
+        "Rotate failed: ",
+        "Rotate 90°"
       )
     );
   }
@@ -942,43 +1036,47 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ rooms, degrees }),
         }),
-        "Rotate failed: "
+        "Rotate failed: ",
+        `Rotate ${degrees}°`
       )
     );
   }
 
   // Laadt (of vervangt) de achtergrondafbeelding. Gebruikt zowel bij het
-  // eerste laden als na het roteren (dan verandert alleen de servercontent
-  // achter dezelfde/nieuwe url, niet de Konva-Image-node zelf).
+  // eerste laden als na het roteren en undo/redo daarvan (dan verandert
+  // alleen de servercontent achter dezelfde url, niet de Konva-Image-node
+  // zelf). Via fetch i.p.v. de <img> rechtstreeks op de url, zodat een
+  // serverfout een nette foutmelding geeft.
   async function loadBackgroundImage(url) {
-    // Als Blob ophalen (i.p.v. de <img> rechtstreeks op de url te zetten) om
-    // 'm ook te kunnen bewaren als undo-snapshot (zie captureUndoSnapshot) -
-    // zonder aparte fetch zou een undo de afbeelding opnieuw van de server
-    // moeten terugvragen, die op dat moment alweer overschreven is.
+    const imgObj = await loadImageElement(url);
+    if (bgImageNode) {
+      bgImageNode.image(imgObj);
+    } else {
+      bgImageNode = new Konva.Image({ image: imgObj, name: "bg-image" });
+      bgLayer.add(bgImageNode);
+    }
+    // Expliciet zetten i.p.v. op Konva's eigen default (= de natuurlijke
+    // afmeting van de <img>) vertrouwen: na roteren staan imageWidth/
+    // imageHeight (uit de server-respons) al vast VOORDAT deze functie
+    // wordt aangeroepen, dus dit is de betrouwbare bron.
+    bgImageNode.width(imageWidth);
+    bgImageNode.height(imageHeight);
+    // De server-afbeelding bevat alle vegen (en teruggezette stukjes) al -
+    // de tijdelijke lagen op het scherm zijn nu overbodig, en zouden na een
+    // draai op de verkeerde plek staan.
+    clearScreenEdits();
+    bgLayer.draw();
+  }
+
+  // Haalt een afbeelding op en wacht tot de browser hem gedecodeerd heeft.
+  async function loadImageElement(url) {
     const resp = await fetch(url);
     if (!resp.ok) throw new Error("Failed to load the image.");
-    const blob = await resp.blob();
-    currentImageBlob = blob;
-    const objectUrl = URL.createObjectURL(blob);
+    const objectUrl = URL.createObjectURL(await resp.blob());
     try {
-      await new Promise((resolve, reject) => {
+      return await new Promise((resolve, reject) => {
         const imgObj = new Image();
-        imgObj.onload = () => {
-          if (bgImageNode) {
-            bgImageNode.image(imgObj);
-          } else {
-            bgImageNode = new Konva.Image({ image: imgObj, name: "bg-image" });
-            bgLayer.add(bgImageNode);
-          }
-          // Expliciet zetten i.p.v. op Konva's eigen default (= de natuurlijke
-          // afmeting van de <img>) vertrouwen: na roteren staan imageWidth/
-          // imageHeight (uit de server-respons) al vast VOORDAT deze functie
-          // wordt aangeroepen, dus dit is de betrouwbare bron.
-          bgImageNode.width(imageWidth);
-          bgImageNode.height(imageHeight);
-          bgLayer.draw();
-          resolve();
-        };
+        imgObj.onload = () => resolve(imgObj);
         imgObj.onerror = () => reject(new Error("Failed to load the image."));
         imgObj.src = objectUrl;
       });
@@ -1040,6 +1138,7 @@
     document.getElementById("btn-delete").addEventListener("click", deleteSelected);
     document.getElementById("btn-merge").addEventListener("click", mergeSelected);
     document.getElementById("btn-undo").addEventListener("click", undo);
+    document.getElementById("btn-redo").addEventListener("click", redo);
     document.getElementById("btn-zoom-in").addEventListener("click", () => zoomBy(1.25));
     document.getElementById("btn-zoom-out").addEventListener("click", () => zoomBy(0.8));
     document.getElementById("btn-zoom-fit").addEventListener("click", () => {
@@ -1053,21 +1152,19 @@
       rotateByAngle(degrees);
     });
     document.addEventListener("keydown", (e) => {
-      if (busy && document.activeElement.tagName !== "INPUT") {
-        // Sneltoetsen (Delete, Ctrl+Z) doen niets zolang er iets loopt.
-        if (e.key === "Delete" || e.key === "Backspace" || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z")) {
-          e.preventDefault();
-        }
-        return;
-      }
-      if ((e.key === "Delete" || e.key === "Backspace") && selectedIds.length && document.activeElement.tagName !== "INPUT") {
-        e.preventDefault();
-        deleteSelected();
-      }
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z" && document.activeElement.tagName !== "INPUT") {
-        e.preventDefault();
-        undo();
-      }
+      if (document.activeElement.tagName === "INPUT") return; // bv. hernoemen: gewone teksttoetsen
+      const ctrl = e.ctrlKey || e.metaKey;
+      const key = e.key.toLowerCase();
+      const isDelete = e.key === "Delete" || e.key === "Backspace";
+      const isUndo = ctrl && key === "z" && !e.shiftKey;
+      // Ctrl+Y (Windows-gewoonte) en Ctrl+Shift+Z (elders gebruikelijk).
+      const isRedo = ctrl && (key === "y" || (key === "z" && e.shiftKey));
+      if (!isDelete && !isUndo && !isRedo) return;
+      e.preventDefault();
+      if (busy) return; // sneltoetsen doen niets zolang er iets loopt
+      if (isDelete && selectedIds.length) deleteSelected();
+      if (isUndo) undo();
+      if (isRedo) redo();
     });
 
     transformer.on("transformend", () => {

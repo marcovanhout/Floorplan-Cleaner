@@ -27,6 +27,10 @@ class JobState:
     rooms: list[RoomRecord] = field(default_factory=list)
     anchor_log: list[AnchorLogEntry] = field(default_factory=list)
     export_zip_path: Path | None = None
+    # Undo/redo van afbeeldingswijzigingen (lijsten van history.ImageStep),
+    # zie history.py.
+    undo_stack: list = field(default_factory=list)
+    redo_stack: list = field(default_factory=list)
 
 
 JOBS: dict[str, JobState] = {}

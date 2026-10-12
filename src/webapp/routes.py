@@ -10,7 +10,6 @@ from pathlib import Path
 
 import pymupdf as fitz
 from flask import Blueprint, abort, jsonify, render_template, request, send_file
-from PIL import Image
 from werkzeug.exceptions import HTTPException
 
 from src.core.constants import DEFAULT_DROP_KEYWORDS, DEFAULT_KEEP_KEYWORDS, DWG_FALLBACK_DROP_KEYWORDS
@@ -22,7 +21,7 @@ from src.core.layers import (
     recommend_layers,
 )
 from src.core.pipeline import (
-    erase_rect,
+    clip_rect,
     export_rooms,
     rotate_by_angle,
     rotate_clockwise,
@@ -33,6 +32,7 @@ from src.core.raster import is_tesseract_available
 from src.core.render import force_black_lines, image_to_png_bytes, render_page
 from src.core.types import RoomRecord
 
+from . import history
 from .state import cleanup_job, create_job, get_job
 
 bp = Blueprint("floorplan", __name__)
@@ -200,6 +200,7 @@ def process(job_id):
     job.mode_a = clean_result.mode_a
     job.clean_image = clean_result.image
     job.rooms = detection.rooms
+    history.clear(job)
     job.anchor_log = detection.anchor_log
 
     return jsonify({"job_id": job.job_id, "redirect": f"/jobs/{job.job_id}/correct"})
@@ -218,6 +219,9 @@ def detect(job_id):
     job = get_job(job_id)
     if job is None or job.clean_image is None:
         abort(404, "Unknown or expired job.")
+    # Het correctiescherm begint (ook na een paginaverversing) met een lege
+    # undo/redo-rij - de server-kant moet daar gelijk mee lopen.
+    history.clear(job)
     return jsonify({
         "job_id": job.job_id,
         "image_url": f"/jobs/{job.job_id}/image",
@@ -239,6 +243,27 @@ def image(job_id):
     )
 
 
+@bp.route("/jobs/<job_id>/image-region")
+def image_region(job_id):
+    """Alleen een uitsnede van de huidige afbeelding - voor Undo van een veeg:
+    de browser hoeft dan alleen dat stukje terug te tekenen i.p.v. de hele
+    (bij een grote tekening tientallen MB's) afbeelding opnieuw op te halen."""
+    job = get_job(job_id)
+    if job is None or job.clean_image is None:
+        abort(404, "Unknown or expired job.")
+    try:
+        x0, y0, x1, y1 = (int(request.args[k]) for k in ("x0", "y0", "x1", "y1"))
+    except (KeyError, ValueError):
+        abort(400, "Expected numeric x0, y0, x1, y1.")
+    x0, y0, x1, y1 = clip_rect(job.clean_image, x0, y0, x1, y1)
+    if x1 <= x0 or y1 <= y0:
+        abort(400, "The region lies outside the drawing.")
+    return send_file(
+        io.BytesIO(image_to_png_bytes(job.clean_image.crop((x0, y0, x1, y1)))),
+        mimetype="image/png",
+    )
+
+
 @bp.route("/jobs/<job_id>/rotate", methods=["POST"])
 def rotate(job_id):
     job = get_job(job_id)
@@ -252,11 +277,13 @@ def rotate(job_id):
     rooms = [_room_from_dict(r) for r in rooms_payload]
 
     job.clean_image, job.rooms = rotate_clockwise(job.clean_image, rooms)
+    step = history.record_rotate90(job)
 
     return jsonify({
         "width": job.clean_image.width,
         "height": job.clean_image.height,
         "rooms": [_room_to_dict(r) for r in job.rooms],
+        "step_id": step.id,
     })
 
 
@@ -281,12 +308,15 @@ def rotate_angle(job_id):
         abort(400, "Invalid angle.")
     rooms = [_room_from_dict(r) for r in rooms_payload]
 
+    before_png = history.snapshot_for_rotate_angle(job)
     job.clean_image, job.rooms = rotate_by_angle(job.clean_image, rooms, degrees)
+    step = history.record_rotate_angle(job, before_png)
 
     return jsonify({
         "width": job.clean_image.width,
         "height": job.clean_image.height,
         "rooms": [_room_to_dict(r) for r in job.rooms],
+        "step_id": step.id,
     })
 
 
@@ -305,39 +335,38 @@ def erase(job_id):
     except (KeyError, TypeError, ValueError):
         abort(400, "Expected numeric x0, y0, x1, y1 in the request body.")
 
-    job.clean_image = erase_rect(job.clean_image, x0, y0, x1, y1)
+    step = history.apply_erase(job, x0, y0, x1, y1)
 
-    return jsonify({"width": job.clean_image.width, "height": job.clean_image.height})
+    return jsonify({"width": job.clean_image.width, "height": job.clean_image.height, "step_id": step.id})
 
 
-@bp.route("/jobs/<job_id>/restore", methods=["POST"])
-def restore(job_id):
-    """'Undo': zet de afbeelding + ruimte-vakken terug naar een staat die de
-    client zelf heeft bewaard van vlak voor de laatste wijziging (roteren of
-    gummen - de enige acties die de afbeelding blijvend aanpassen; een
-    losstaande ruimte-vak-bewerking hoeft de server niet in, die leeft tot
-    het exporteren alleen client-side). Eenmalige undo, geen verdere
-    geschiedenis of redo - de client bewaart zelf maar 1 stap terug."""
+def _history_move(job_id: str, move):
+    """Gedeelde afhandeling van /undo en /redo (move = history.undo/redo)."""
     job = get_job(job_id)
-    if job is None:
+    if job is None or job.clean_image is None:
         abort(404, "Unknown or expired job.")
-
-    file = request.files.get("image")
-    if not file:
-        abort(400, "Expected an 'image' file in the request body.")
+    body = request.get_json(force=True, silent=True) or {}
     try:
-        rooms = [_room_from_dict(r) for r in json.loads(request.form.get("rooms", "[]"))]
-    except (TypeError, ValueError):
-        abort(400, "Expected a JSON 'rooms' field in the request body.")
-
-    job.clean_image = Image.open(io.BytesIO(file.read())).convert("RGBA")
-    job.rooms = rooms
-
+        step = move(job, str(body.get("step_id", "")))
+    except history.HistoryMismatch:
+        abort(409, "The undo history is out of sync; reload the page to continue.")
     return jsonify({
         "width": job.clean_image.width,
         "height": job.clean_image.height,
-        "rooms": [_room_to_dict(r) for r in job.rooms],
+        "kind": step.kind,
     })
+
+
+@bp.route("/jobs/<job_id>/undo", methods=["POST"])
+def undo(job_id):
+    """Draait de bovenste afbeeldingsstap (roteren/gummen) terug - zie
+    history.py. Ruimte-vak-wijzigingen draait de browser zelf terug."""
+    return _history_move(job_id, history.undo)
+
+
+@bp.route("/jobs/<job_id>/redo", methods=["POST"])
+def redo(job_id):
+    return _history_move(job_id, history.redo)
 
 
 @bp.route("/jobs/<job_id>/export", methods=["POST"])
